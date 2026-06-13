@@ -5,7 +5,7 @@
 # Stages (each fails fast):
 #   1. Validate configs    — Zensical docs build + GitLab component / TOML parse
 #   2. Build image         — $CE build of the rootless sandbox (skip: SKIP_BUILD=1)
-#   3. Toolchain smoke     — claude/node/$CE present inside the container
+#   3. Toolchain smoke     — claude/node/$CE present + outbound HTTPS egress works
 #   4. Sandbox containment — software-install attempts are DENIED (the safety claim);
 #                            with ANTHROPIC_API_KEY, Claude itself tries and is blocked
 #   5. Live agent run      — real claude prompt, only if ANTHROPIC_API_KEY is set
@@ -92,7 +92,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-info "Stage 3/5 — toolchain smoke test (inside container)"
+info "Stage 3/5 — toolchain & connectivity smoke test (inside container)"
 # ---------------------------------------------------------------------------
 
 # Run as the image default user. OpenShift injects an arbitrary high non-root UID
@@ -104,6 +104,18 @@ run() { $CE run --rm "$IMAGE" "$@"; }
 run claude --version >/dev/null && pass "claude CLI present" || fail "claude CLI missing in image"
 run node --version   >/dev/null && pass "node present"        || fail "node missing in image"
 run $CE --version >/dev/null && pass "$CE present"      || fail "$CE missing in image"
+
+# Outbound connectivity — the agent needs HTTPS egress to reach the Anthropic API.
+# ipinfo.io over :443 mirrors the only egress the NetworkPolicy allows. Skip in
+# air-gapped CI with SKIP_NET=1.
+if [ "${SKIP_NET:-0}" = "1" ]; then
+  printf '\033[33m• connectivity check skipped (SKIP_NET=1)\033[0m\n'
+else
+  IPINFO="$(run curl -sS --max-time 15 https://ipinfo.io/ip 2>/dev/null || true)"
+  printf '%s' "$IPINFO" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' \
+    && pass "outbound HTTPS works — egress IP $IPINFO (curl ipinfo.io)" \
+    || fail "no outbound HTTPS connectivity (curl ipinfo.io) — set SKIP_NET=1 if intentional"
+fi
 
 # ---------------------------------------------------------------------------
 info "Stage 4/5 — sandbox containment (software install must be denied)"

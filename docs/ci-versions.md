@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret storeâ
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.1
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.2
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret storeâ
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.1
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.2
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -297,7 +297,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.1
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.2
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -309,7 +309,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.1` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.2` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable â‡’ protected ref"
 
@@ -322,7 +322,7 @@ The component reads the variable **by name** at runtime and exports it for the
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage the job runs in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.1` | Published sandbox image providing the Claude Code CLI. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.2` | Published sandbox image providing the Claude Code CLI. |
 | `prompt` | *(required)* | The task prompt handed to the agent. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic keyâ€” never the key itself. The job fails fast if it is unset. |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |

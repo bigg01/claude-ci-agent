@@ -100,7 +100,7 @@ first**, then unchanged in CI. It runs five fail-fast stages:
 
 1. **Validate configs**— Zensical docs build, plus `zensical.toml` / GitLab component parse checks
 2. **Build image**— `podman build` of the rootless sandbox (`SKIP_BUILD=1` reuses an existing image)
-3. **Toolchain smoke**— confirms `claude` / `node` / `podman` are present inside the container
+3. **Toolchain & connectivity smoke**— confirms `claude` / `node` / `podman` are present and that outbound HTTPS egress works (`curl ipinfo.io`; skip with `SKIP_NET=1`)
 4. **Sandbox containment**— proves software-install attempts are **denied** (non-root, no system writes, no escalation); with `ANTHROPIC_API_KEY`, Claude itself tries to install and is blocked
 5. **Live agent run**— a real `claude` prompt, only when `ANTHROPIC_API_KEY` is set
 
