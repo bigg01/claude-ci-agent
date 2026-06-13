@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -71,6 +72,51 @@ def _ci_metadata() -> dict[str, str]:
     return {"ci.system": "unknown"}
 
 
+def _git(*args: str) -> str:
+    """Run a git command in the workspace, returning stdout or "" on any failure."""
+    try:
+        out = subprocess.run(
+            ["git", *args], capture_output=True, text=True, timeout=5, check=True
+        )
+        return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _git_metadata() -> dict[str, str]:
+    """The commit the run produced (after the agent's commit, if any) + branch.
+
+    This is the authoritative "which git hash" for the run— the agent's HEAD,
+    which differs from the triggering checkout once it commits. Empty when not in
+    a git working tree.
+    """
+    meta: dict[str, str] = {}
+    head = _git("rev-parse", "HEAD")
+    if head:
+        meta["git.commit.sha"] = head
+        meta["git.commit.short"] = head[:8]
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    if branch and branch != "HEAD":
+        meta["git.ref"] = branch
+    return meta
+
+
+def _model(result: dict) -> str:
+    """Which model actually served the run— prefer the result, fall back to env.
+
+    Claude's JSON result reports usage per model under ``modelUsage``; use that
+    key when present, otherwise an explicit ``model`` field, otherwise the
+    configured ``CLAUDE_MODEL``.
+    """
+    model = result.get("model")
+    if model:
+        return str(model)
+    usage = result.get("modelUsage")
+    if isinstance(usage, dict) and usage:
+        return next(iter(usage))
+    return os.environ.get("CLAUDE_MODEL", "unknown")
+
+
 def _attr(key: str, value) -> dict:
     """Build a single OTLP KeyValue, picking the right value type."""
     if isinstance(value, bool):
@@ -100,8 +146,9 @@ def _build_payload(result: dict) -> dict:
     # Common attributes attached to every datapoint— CI context plus the run's
     # own identifiers. Blank values are skipped so dashboards stay clean.
     attrs = {k: v for k, v in _ci_metadata().items() if v}
+    attrs.update(_git_metadata())                  # which git hash the run produced
     attrs["claude.personality"] = os.environ.get("CLAUDE_PERSONALITY", "unknown")
-    attrs["claude.model"] = os.environ.get("CLAUDE_MODEL", "")
+    attrs["claude.model"] = _model(result)         # which model actually served it
     for key, src in (
         ("claude.session.id", "session_id"),
         ("claude.num_turns", "num_turns"),
@@ -235,9 +282,7 @@ def _cost_summary(result: dict) -> str | None:
     if cost is None:
         return None
     parts = [f"this run cost ${float(cost):.4f} in Anthropic API usage"]
-    model = os.environ.get("CLAUDE_MODEL")
-    if model:
-        parts.append(model)
+    parts.append(_model(result))
     turns = result.get("num_turns")
     if turns is not None:
         parts.append(f"{turns} turns")
@@ -247,6 +292,9 @@ def _cost_summary(result: dict) -> str | None:
     duration = result.get("duration_ms")
     if duration is not None:
         parts.append(f"{float(duration) / 1000:.1f}s")
+    commit = _git_metadata().get("git.commit.short")
+    if commit:
+        parts.append(f"commit {commit}")
     return " · ".join(parts)
 
 

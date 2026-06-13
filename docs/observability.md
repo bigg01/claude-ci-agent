@@ -52,7 +52,10 @@ The cost is surfaced three ways:
 - **In the GitHub Actions run summary**— a "Claude run cost" table on the job page.
 - **As an OTel metric**— `cicd.claude.run.cost_usd` (plus `…run.duration_ms` and
   `…run.tokens` by type), tagged with CI/VCS attributes so cost is attributable per
-  pipeline, branch, and personality in Elastic.
+  pipeline, branch, and personality in Elastic. Every datapoint also carries
+  **`claude.model`** (the model that actually served the run) and
+  **`git.commit.sha`** / `git.commit.short` (the commit the run produced)— so you
+  can answer "which model and which commit" for any run.
 
 !!! note "Client-side estimate"
 
