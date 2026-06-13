@@ -215,22 +215,42 @@ It runs the agent inside the sandbox image with OTel telemetry enabled and
 defaults to bypass-permissions ("YOLO") mode— safe here because the agent is
 [fully contained](yolo-mode.md).
 
-Reference it from your `.gitlab-ci.yml`:
+**Step 1 — set the Anthropic key as a CI/CD variable** (this is how the key is
+provided; it is **never** a component input). In the consuming project (or group):
+**Settings → CI/CD → Variables → Add variable**:
+
+| Field | Value |
+| --- | --- |
+| Key | `ANTHROPIC_API_KEY` |
+| Value | your `sk-ant-…` key |
+| Flags | ✔ **Masked**, ✔ **Protected**, **Expand variable reference** off |
+
+**Step 2 — include the component** in your `.gitlab-ci.yml`:
 
 ```yaml
 stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@main
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.1
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
+      # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
 ```
 
-!!! note "Replace the component path"
+The component reads the variable **by name** at runtime and exports it for the
+`claude` CLI — fail-fast if it's unset.
+
+!!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@main` to a tag or commit SHA for reproducible pipelines.
+    `@v0.1.0-alpha.1` to a released tag (or a commit SHA) for reproducible pipelines.
+
+!!! warning "Protected variable ⇒ protected ref"
+
+    A **Protected** variable is only injected on **protected** branches/tags. If the
+    pipeline runs on an unprotected branch, `ANTHROPIC_API_KEY` is empty and the job
+    fails fast — either protect the branch or drop the Protected flag.
 
 #### Inputs
 
