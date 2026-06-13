@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] — 2026-06-13
+
+### Added
+- OTel telemetry now tags every run with **`claude.model`** (the model that
+  actually served the run) and **`git.commit.sha`** (the commit it produced).
+- Community health files: `CONTRIBUTING`, `CODE_OF_CONDUCT`, `SUPPORT`,
+  `SECURITY`, and `CODEOWNERS`; README links to the published docs site.
+- Docs: GitLab + Jira spec-driven scenario.
+
+### Changed
+- `main` is now a protected branch (PR-only, required CI checks).
+- Pinned chart/component/action/docs to `0.1.0-alpha.3`.
+
 ## [0.1.0-alpha.2] — 2026-06-13
 
 ### Added
@@ -40,6 +53,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.3...HEAD
+[0.1.0-alpha.3]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/bigg01/claude-ci-agent/releases/tag/v0.1.0-alpha.1

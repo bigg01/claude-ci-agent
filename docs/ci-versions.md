@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.2
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.3
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.2
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.3
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -297,7 +297,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.2
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.3
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -309,7 +309,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.2` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.3` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable ⇒ protected ref"
 
@@ -322,7 +322,7 @@ The component reads the variable **by name** at runtime and exports it for the
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage the job runs in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.2` | Published sandbox image providing the Claude Code CLI. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.3` | Published sandbox image providing the Claude Code CLI. |
 | `prompt` | *(required)* | The task prompt handed to the agent. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
@@ -375,3 +375,147 @@ jobs:
 
 For the reusable action, the secret is passed via the `secrets` context (auto-masked
 in logs); the action itself never sees it as a plaintext input.
+
+## Complete scenario— GitLab + Jira, spec-driven
+
+This ties the pieces together: a **Jira issue is the spec**, a status change kicks
+off GitLab, the read-write **Agent** implements it, the read-only **Advisor** grades
+the MR against that same spec, and the verdict flows back onto the ticket. The
+deeper rationale lives in [Spec-driven development](spec-driven.md#triggering-from-jira-with-gitlab);
+this is the concrete GitLab wiring.
+
+### Timeline
+
+1. A PO writes acceptance criteria on **`PROJ-142`** and moves it to **AI-Ready**.
+2. A **Jira Automation** rule fires a web request to GitLab's pipeline-trigger API,
+   passing `JIRA_ISSUE_KEY=PROJ-142`.
+3. The **`implement`** job pulls the issue → `spec/PROJ-142.md`, the Agent implements
+   to spec, opens MR **`claude/PROJ-142`**, comments on Jira, and moves it to **In Review**.
+4. The MR-open event runs the **`advisor`** job: it grades each criterion against the
+   spec, posts **PASS/FAIL** on the MR *and* on Jira, and transitions the issue.
+5. **PASS** → a human merges; a [Smart Commit](https://support.atlassian.com/jira-software-cloud/docs/process-issues-with-smart-commits/)
+   (`PROJ-142 #close`) closes the ticket. **FAIL** → a reviewer re-triggers the Agent
+   on the same branch. The agent never self-merges.
+
+### Jira side— the trigger
+
+A Jira Automation rule, *When* issue transitions to `AI-Ready`, *Then* **Send web
+request** (store the GitLab trigger token in Jira's secret vault, not inline):
+
+```text
+POST https://gitlab.example.com/api/v4/projects/<PROJECT_ID>/trigger/pipeline
+form-encoded:
+  token = {{ GitLab trigger token }}
+  ref   = main
+  variables[JIRA_ISSUE_KEY] = {{ issue.key }}
+```
+
+### GitLab side— the complete `.gitlab-ci.yml`
+
+Set as CI/CD variables (masked/protected, or minted at runtime by the
+[OpenBao addon](secrets-openbao.md)): `ANTHROPIC_API_KEY`, `JIRA_URL`, `JIRA_TOKEN`,
+`GIT_PUSH_TOKEN` (the Agent bot's write token), and the Jira transition IDs.
+
+```yaml
+stages: [implement, review]
+
+variables:
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.3
+  CLAUDE_MODEL: "claude-sonnet-4-6"
+  CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+  OTEL_LOG_TOOL_CONTENT: "1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+
+# Shared Jira helpers, injected into each job's before_script as shell functions.
+.jira_fns: &jira_fns |
+  jira_to_spec() {            # Jira issue → spec/<KEY>.md (Jira Cloud returns ADF JSON)
+    mkdir -p spec
+    curl -sS -H "Authorization: Bearer $JIRA_TOKEN" \
+      "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY?fields=summary,description" \
+    | python3 -c '
+  import sys, json
+  d = json.load(sys.stdin)["fields"]
+  def t(n): return (n.get("text","")+"".join(t(c) for c in n.get("content",[]))) if isinstance(n,dict) else "".join(t(c) for c in n) if isinstance(n,list) else ""
+  print("# %s\n\n%s" % (d["summary"], t(d.get("description") or {})))' > "spec/$JIRA_ISSUE_KEY.md"
+  }
+  jira_comment() {            # post the contents of $1 as a comment on the issue
+    jq -Rs '{body:{type:"doc",version:1,content:[{type:"paragraph",content:[{type:"text",text:.}]}]}}' "$1" \
+    | curl -sS -X POST -H "Authorization: Bearer $JIRA_TOKEN" -H "Content-Type: application/json" \
+        "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY/comment" -d @-
+  }
+  jira_transition() {         # move the issue to transition id $1
+    curl -sS -X POST -H "Authorization: Bearer $JIRA_TOKEN" -H "Content-Type: application/json" \
+      "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY/transitions" -d "{\"transition\":{\"id\":\"$1\"}}"
+  }
+
+# ---- AGENT (read-write): Jira-triggered implementation -----------------------
+implement:
+  stage: implement
+  image: $AGENT_IMAGE
+  rules:
+    - if: '$JIRA_ISSUE_KEY'            # only on the Jira-triggered pipeline
+  before_script:
+    - *jira_fns
+    - git config user.name  "Claude Agent · payments"
+    - git config user.email "claude-agent+payments@acme.dev"
+  script:
+    - jira_to_spec
+    - |
+      claude -p "Implement spec/$JIRA_ISSUE_KEY.md exactly. Satisfy every acceptance \
+      criterion, add the tests it requires, follow CLAUDE.MD. Nothing out of scope." \
+        --model "$CLAUDE_MODEL" --permission-mode bypassPermissions \
+        --dangerously-skip-permissions
+    # New branch named with the Jira key → GitLab/Jira auto-link the MR to the issue.
+    - |
+      git checkout -b "claude/$JIRA_ISSUE_KEY"
+      git add -A
+      git commit -m "feat($JIRA_ISSUE_KEY): implement from spec" \
+        -m "Claude-Personality: agent" \
+        -m "Claude-Run: gitlab/pipeline/$CI_PIPELINE_ID"
+      git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+        "HEAD:claude/$JIRA_ISSUE_KEY" \
+        -o merge_request.create \
+        -o merge_request.title="$JIRA_ISSUE_KEY implement from spec"
+    - echo "Claude opened an implementation MR for review." > _msg.txt && jira_comment _msg.txt
+    - jira_transition "$JIRA_IN_REVIEW_ID"
+
+# ---- ADVISOR (read-only): grade the MR against the spec ----------------------
+advisor:
+  stage: review
+  image: $AGENT_IMAGE
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^claude\//'
+  variables:
+    JIRA_ISSUE_KEY: "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"   # claude/PROJ-142 → stripped below
+  before_script:
+    - *jira_fns
+    - 'export JIRA_ISSUE_KEY="${JIRA_ISSUE_KEY#claude/}"'
+  script:
+    - |
+      claude -p "You are the ADVISOR (read-only). Review this MR against \
+      spec/$JIRA_ISSUE_KEY.md. For EACH acceptance criterion, state PASS or FAIL with \
+      file:line evidence. Run the tests and linters. Note any out-of-scope work or \
+      CLAUDE.MD violations. Write the verdict to review.md. Do NOT modify files." \
+        --model "$CLAUDE_MODEL" --permission-mode bypassPermissions \
+        --dangerously-skip-permissions
+    # Post the verdict to the MR (bot API token) and to Jira, then transition.
+    - |
+      jq -Rs '{body: .}' review.md | curl -sS -X POST \
+        -H "PRIVATE-TOKEN: $GIT_PUSH_TOKEN" -H "Content-Type: application/json" \
+        "$CI_API_V4_URL/projects/$CI_MERGE_REQUEST_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" -d @-
+    - jira_comment review.md
+    - |
+      grep -q 'FAIL' review.md && jira_transition "$JIRA_CHANGES_REQUESTED_ID" \
+                               || jira_transition "$JIRA_IN_REVIEW_ID"
+  artifacts:
+    paths: [review.md]
+    expire_in: 1 week
+```
+
+!!! note "Why the Advisor stays safe here"
+
+    The Advisor gets the **Jira token** (to comment + transition) and a token to post
+    the MR note, but **no `GIT_PUSH_TOKEN` for code**— it cannot change the branch it
+    is reviewing. Both jobs are
+    [fully contained](yolo-mode.md), and every step streams secret-scrubbed OTLP to
+    Elastic, tagged with `JIRA_ISSUE_KEY` so the whole feature is auditable end to end.

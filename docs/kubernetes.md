@@ -27,10 +27,10 @@ artifact in GHCR. You don't need to clone the repo:
 
 ```sh
 # From the OCI registry (version = the release tag without the leading "v")
-helm install ci oci://ghcr.io/bigg01/charts/claude-ci-agent --version 0.1.0-alpha.2
+helm install ci oci://ghcr.io/bigg01/charts/claude-ci-agent --version 0.1.0-alpha.3
 
 # …or from the .tgz attached to the release
-helm install ci https://github.com/bigg01/claude-ci-agent/releases/download/v0.1.0-alpha.2/claude-ci-agent-0.1.0-alpha.2.tgz
+helm install ci https://github.com/bigg01/claude-ci-agent/releases/download/v0.1.0-alpha.3/claude-ci-agent-0.1.0-alpha.3.tgz
 ```
 
 The chart's `appVersion` pins the matching agent image tag automatically, so the
