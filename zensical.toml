@@ -53,19 +53,19 @@ Copyright &copy; 2026 bigg01
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Home" = "index.md" },
-  { "Step-by-step guide" = "getting-started.md" },
   { "Architecture" = "architecture.md" },
   { "CI Versions" = "ci-versions.md" },
   { "Spec-driven development" = "spec-driven.md" },
-  { "Tooling & Commands" = "tooling.md" },
+  { "Step-by-step guide" = "getting-started.md" },
+#  { "Tooling & Commands" = "tooling.md" },
   { "Sandboxing & YOLO Mode" = "yolo-mode.md" },
   { "Observability" = "observability.md" },
-  { "Per-team routing" = "team-routing.md" },
+#  { "Per-team routing" = "team-routing.md" },
   { "Local stack (Compose)" = "local-stack.md" },
-  { "LLM Gateway" = "llm-gateway.md" },
-  { "Kubernetes (Helm)" = "kubernetes.md" },
-  { "Secrets (OpenBao)" = "secrets-openbao.md" },
-  { "Markdown in 5min" = "markdown.md" },
+#  { "LLM Gateway" = "llm-gateway.md" },
+#  { "Kubernetes (Helm)" = "kubernetes.md" },
+#  { "Secrets (OpenBao)" = "secrets-openbao.md" },
+#  { "Markdown in 5min" = "markdown.md" },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
