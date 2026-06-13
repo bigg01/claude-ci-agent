@@ -29,7 +29,7 @@ Reusable across repos as a [GitLab component](templates/claude-agent.yml)
 (`uses: bigg01/claude-ci-agent@v1`).
 
 > Operating guide for the agent itself lives in [`CLAUDE.MD`](CLAUDE.MD).
-
+>
 > **Where this repo lives:** developed on **GitHub** — all CI runs in
 > [`.github/workflows/`](.github/workflows/) — and mirrored read-only to
 > **GitLab**, where the only pipeline is a tagged release that publishes the
@@ -96,12 +96,13 @@ make test     # uv run pytest
 ```
 
 **End-to-end test (`make test-e2e`).** [`tests/e2e.sh`](tests/e2e.sh) runs **locally
-first**, then unchanged in CI. It runs four fail-fast stages:
+first**, then unchanged in CI. It runs five fail-fast stages:
 
 1. **Validate configs**— Zensical docs build, plus `zensical.toml` / GitLab component parse checks
 2. **Build image**— `podman build` of the rootless sandbox (`SKIP_BUILD=1` reuses an existing image)
 3. **Toolchain smoke**— confirms `claude` / `node` / `podman` are present inside the container
-4. **Live agent run**— a real `claude` prompt, only when `ANTHROPIC_API_KEY` is set
+4. **Sandbox containment**— proves software-install attempts are **denied** (non-root, no system writes, no escalation); with `ANTHROPIC_API_KEY`, Claude itself tries to install and is blocked
+5. **Live agent run**— a real `claude` prompt, only when `ANTHROPIC_API_KEY` is set
 
 ```bash
 make test-e2e                 # full run (builds the image)

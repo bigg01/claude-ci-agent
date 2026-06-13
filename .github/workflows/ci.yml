@@ -1,9 +1,11 @@
-# GitHub Actions — project CI (tests).
+# GitHub Actions — project CI quality gates.
 #
 # GitHub is the source of truth for this repo (GitLab is a read-only mirror that
-# only publishes the component). This workflow runs the fast pytest suite — unit
-# tests for the OTLP cost emitter plus static validation of the configs and
-# manifests — on every push and pull request, gating the rest of the project.
+# only publishes the component). Every push/PR must pass four gates:
+#   * test       — pytest + coverage floor (fail_under in pyproject.toml)
+#   * markdown   — markdownlint on the docs + README
+#   * secrets    — gitleaks (deliberately-fake creds are allowlisted)
+#   * vuln       — Trivy dependency/vulnerability scan
 name: ci
 
 on:
@@ -11,7 +13,11 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  # ---- Tests + coverage --------------------------------------------------- #
   test:
     runs-on: ubuntu-latest
     steps:
@@ -22,11 +28,57 @@ jobs:
           python-version: "3.12"
       - name: Sync dependencies
         run: uv sync --dev
-      - name: Run pytest
-        run: uv run pytest --junitxml=report.xml
-      - name: Upload test report
+      - name: Run pytest with coverage
+        # --cov (no arg) uses [tool.coverage.run] source; fail_under in
+        # [tool.coverage.report] enforces the coverage floor and fails the gate.
+        run: >-
+          uv run pytest
+          --cov --cov-report=term-missing --cov-report=xml
+          --junitxml=report.xml
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-report
-          path: report.xml
+          name: test-reports
+          path: |
+            report.xml
+            coverage.xml
+
+  # ---- Markdown lint ------------------------------------------------------ #
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Uses .markdownlint-cli2.yaml (globs + relaxed rules for Material syntax).
+      - name: markdownlint
+        run: npx --yes markdownlint-cli2
+
+  # ---- Secret scan -------------------------------------------------------- #
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # scan full history
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  # ---- Vulnerability scan ------------------------------------------------- #
+  vuln-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

@@ -1,0 +1,26 @@
+# markdownlint-cli2 config. Rules are relaxed where they conflict with the
+# Zensical/Material docs style (admonitions, content tabs, HTML banners, the
+# CLAUDE.MD em-dash convention).
+config:
+  default: true
+  MD013: false            # line length — prose wraps freely
+  MD033: false            # inline HTML — banner <img>, mxgraph divs
+  MD041: false            # first-line heading — pages start with frontmatter / <img>
+  MD040: false            # fenced-code language — some ascii/flow blocks are unlabeled
+  MD036: false            # emphasis-as-heading — "**Step 1 —** …" lead-ins
+  MD046: false            # code-block style — admonition bodies indent 4 spaces
+  MD024:
+    siblings_only: true   # allow repeated headings under different parents
+  MD030: false            # list-marker spacing — Material grid-cards align markers
+
+# Lint the published documentation and the README. The agent guide (CLAUDE.MD)
+# and the raw input/ blueprints follow their own conventions and are out of scope.
+globs:
+  - "README.md"
+  - "docs/**/*.md"
+
+ignores:
+  - ".venv/**"
+  - "site/**"
+  - "node_modules/**"
+  - ".cache/**"

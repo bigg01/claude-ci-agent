@@ -9,6 +9,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
     "pyyaml>=6.0.3",
     "zensical>=0.0.45",
 ]
@@ -17,3 +18,12 @@ dev = [
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"
+
+[tool.coverage.run]
+source = ["otel"]
+
+[tool.coverage.report]
+show_missing = true
+# emit_cost.py is best-effort glue; the unreachable transport/branch arms are
+# exercised loosely. 85% keeps a real floor with headroom under the current 90%.
+fail_under = 85

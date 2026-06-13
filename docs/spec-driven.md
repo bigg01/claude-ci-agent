@@ -35,7 +35,9 @@ flowchart LR
 ## 1. Write the spec
 
 Keep specs in the repo so they are versioned, reviewed, and reachable by the agent.
-A simple convention is one file per feature under `spec/`:
+A simple convention is one file per feature under `spec/`. The spec can be authored
+by hand— or generated from a **Jira issue's** acceptance criteria when Jira is your
+tracker (see [Triggering from Jira](#triggering-from-jira-with-gitlab) below):
 
 ```markdown
 # spec/export-csv.md
@@ -133,6 +135,127 @@ flowchart LR
   V -->|"spec wrong"| W
   V -->|PASS| H["Human merges"]
 ```
+
+## Triggering from Jira (with GitLab)
+
+When GitLab is your SCM and **Jira** is your tracker, the **Jira issue is the
+spec**— its description and acceptance criteria are the contract— and the issue's
+**status drives the loop**. Moving a ticket to an "AI-Ready" state kicks off the
+Agent; the Advisor's verdict flows back onto the ticket. Nothing new is needed in
+the agent itself— only a trigger and two small API calls.
+
+```mermaid
+sequenceDiagram
+  participant J as Jira issue (PROJ-123)
+  participant GL as GitLab pipeline
+  participant AG as Agent (read-write)
+  participant AD as Advisor (read-only)
+  participant H as Human
+  J->>GL: status → "AI-Ready"<br/>Automation: web request → pipeline trigger
+  GL->>AG: run with JIRA_ISSUE_KEY=PROJ-123
+  AG->>J: fetch summary + acceptance criteria (REST)
+  AG->>GL: implement → branch claude/PROJ-123 → open MR
+  GL->>AD: MR opened → review vs the issue's criteria
+  AD->>J: comment verdict (PASS/FAIL per criterion)
+  AD->>J: transition (e.g. "In Review" / "Changes Requested")
+  H->>J: merge MR → Smart Commit closes the issue
+```
+
+### 1. Jira side— fire on a status change
+
+Add a **Jira Automation** rule: *When* issue transitions to `AI-Ready` (or gets a
+`claude` label), *Then* **Send web request** to GitLab's
+[pipeline-trigger API](https://docs.gitlab.com/ee/ci/triggers/), passing the issue
+key as a variable:
+
+```text
+POST https://gitlab.example.com/api/v4/projects/<PROJECT_ID>/trigger/pipeline
+form-encoded:
+  token = {{ GitLab trigger token }}          # store in Jira's secret, not inline
+  ref   = main
+  variables[JIRA_ISSUE_KEY] = {{ issue.key }}
+  variables[CLAUDE_TASK]    = Implement {{ issue.key }} from its acceptance criteria
+```
+
+`CLAUDE_TASK` makes the existing [Agent job](ci-versions.md#personalities-triggers)
+rule (`if: $CLAUDE_TASK`) match— no pipeline change required to start.
+
+### 2. GitLab side— materialize the spec and link back
+
+In the Agent job, turn the Jira issue into the in-repo spec the loop already
+expects, then name the branch with the issue key so GitLab's
+[Jira integration](https://docs.gitlab.com/ee/integration/jira/) auto-links the MR
+to the ticket:
+
+```yaml
+script:
+  # Pull the issue → spec/<KEY>.md (JIRA_URL/JIRA_TOKEN from CI vars or OpenBao).
+  # Jira Cloud returns the description as ADF (JSON); flatten its text nodes.
+  - |
+    curl -sS -H "Authorization: Bearer $JIRA_TOKEN" \
+      "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY?fields=summary,description" \
+      | python3 -c '
+    import sys, json
+    d = json.load(sys.stdin)["fields"]
+    def text(node):
+        if isinstance(node, dict):
+            return node.get("text", "") + "".join(text(c) for c in node.get("content", []))
+        return "".join(text(c) for c in node) if isinstance(node, list) else ""
+    print("# %s\n\n%s" % (d["summary"], text(d.get("description") or {})))
+    ' > "spec/$JIRA_ISSUE_KEY.md"
+  - |
+    claude -p "Implement spec/$JIRA_ISSUE_KEY.md exactly. Satisfy every acceptance \
+    criterion, add the tests it requires, follow CLAUDE.MD." \
+      --model "$CLAUDE_MODEL" --permission-mode bypassPermissions \
+      --dangerously-skip-permissions
+  # Branch + MR carry the issue key so Jira and GitLab cross-link automatically.
+  - |
+    git push "https://oauth2:${GIT_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+      "HEAD:claude/${JIRA_ISSUE_KEY}" \
+      -o merge_request.create \
+      -o merge_request.title="${JIRA_ISSUE_KEY} implement from spec"
+```
+
+### 3. Report the verdict back onto the ticket
+
+When the Advisor finishes its review (MR-open trigger), post the verdict to the
+issue and move it— so the loop is visible to non-engineers in Jira, not just in
+GitLab:
+
+```yaml
+# In the Advisor job, after review.md is written:
+- |
+  jq -Rs '{body: {type:"doc", version:1, content:[{type:"paragraph",
+    content:[{type:"text", text: .}]}]}}' review.md \
+    | curl -sS -X POST -H "Authorization: Bearer $JIRA_TOKEN" \
+        -H "Content-Type: application/json" \
+        "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY/comment" -d @-
+# …and transition, e.g. PASS → "In Review", FAIL → "Changes Requested":
+- |
+  curl -sS -X POST -H "Authorization: Bearer $JIRA_TOKEN" \
+    -H "Content-Type: application/json" \
+    "$JIRA_URL/rest/api/3/issue/$JIRA_ISSUE_KEY/transitions" \
+    -d "{\"transition\":{\"id\":\"$JIRA_TRANSITION_ID\"}}"
+```
+
+### How the loop closes through Jira
+
+- **FAIL** → the Advisor's comment lands on `PROJ-123`; a reviewer (or a follow-up
+  `@claude` comment) re-triggers the Agent on the same branch. The ticket sits in
+  "Changes Requested" until the next review passes.
+- **Spec wrong, not the code** → edit the issue's acceptance criteria and move it
+  back to `AI-Ready`; the regenerated `spec/PROJ-123.md` tracks the change.
+- **PASS** → a human merges the MR. A [Smart Commit](https://support.atlassian.com/jira-software-cloud/docs/process-issues-with-smart-commits/)
+  (`PROJ-123 #close`) in the merge transitions the issue to Done— the agent never
+  self-merges or self-closes.
+
+!!! note "Credentials stay zero-trust"
+
+    The GitLab **trigger token** is scoped to one project; the **Jira API token**
+    and `GIT_PUSH_TOKEN` come from CI variables or, better, the
+    [OpenBao addon](secrets-openbao.md) at run time— nothing long-lived is baked
+    into Jira or the pipeline. The read-only Advisor gets the Jira token to comment
+    but **no** `GIT_PUSH_TOKEN`, so it still cannot change code.
 
 ## Guardrails that make this safe
 

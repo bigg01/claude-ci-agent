@@ -1,0 +1,19 @@
+# gitleaks config — secret-scan quality gate.
+# Extends the default ruleset, but allowlists the deliberately-fake credentials
+# used in docs, tests, and the dashboard mockup so the gate flags only real leaks.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake / placeholder credentials used in examples, tests, and mockups"
+regexes = [
+  '''sk-ant-FAKE[A-Za-z0-9_-]*''',     # tests/ci-local.sh, seeded demo data
+  '''sk-ant-\.\.\.''',                  # docs placeholders ("sk-ant-...")
+  '''sk-ant-[A-Za-z0-9]*FAKE[A-Za-z0-9]*''',
+  '''\*\*\*REDACTED[A-Za-z_]*\*\*\*''', # scrubbed-output examples
+  '''E2E_OK''',
+]
+# Example/illustrative files that intentionally contain fake secret-shaped strings.
+paths = [
+  '''docs/assets/elastic-dashboard-mockup\.svg''',
+]

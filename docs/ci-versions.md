@@ -323,7 +323,7 @@ The component reads the variable **by name** at runtime and exports it for the
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage the job runs in. |
 | `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.1` | Published sandbox image providing the Claude Code CLI. |
-| `prompt` | _(required)_ | The task prompt handed to the agent. |
+| `prompt` | *(required)* | The task prompt handed to the agent. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
 | `otel_endpoint` | `http://localhost:4318` | OTLP endpoint of the OTel Collector sidecar. |
@@ -359,8 +359,8 @@ jobs:
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `prompt` | _(required)_ | The task prompt handed to the agent. |
-| `anthropic_api_key` | _(required)_ | Anthropic API key— pass from `${{ secrets.* }}`, never inline. The action fails fast if empty. |
+| `prompt` | *(required)* | The task prompt handed to the agent. |
+| `anthropic_api_key` | *(required)* | Anthropic API key— pass from `${{ secrets.* }}`, never inline. The action fails fast if empty. |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
 | `model` | `claude-sonnet-4-6` | Claude model id. |
 | `otel_endpoint` | `http://localhost:4318` | OTLP endpoint of the OTel Collector sidecar. |

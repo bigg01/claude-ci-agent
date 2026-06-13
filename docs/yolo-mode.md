@@ -36,6 +36,45 @@ In other words, the security boundary that a bolt-on sandbox would add is
 *already* the boundary we run inside. YOLO mode here means **"skip the prompts,"**
 not **"skip the containment."**
 
+## Example— a YOLO-mode run
+
+A headless run in the sandbox with bypass-permissions on. The agent does its work
+with no approval prompts— and when it reaches for something the sandbox forbids,
+the **container**, not a prompt, stops it:
+
+```console
+$ podman run --rm -e ANTHROPIC_API_KEY app-test \
+    claude --dangerously-skip-permissions \
+      -p "Build the project, run the tests, then install 'cowsay' to celebrate."
+
+● Building, testing, then attempting the install.
+  $ podman build -t app-test .          → ok
+  $ npm test                            → 12 passed
+  $ dnf install -y cowsay
+    Error: This command has to be run with superuser privileges
+           (under the root user on most systems).
+● I can't install system packages here— this is a non-root, rootless Podman
+  sandbox. Build and tests passed; skipping the install.
+```
+
+No approval prompt appeared (that is YOLO mode), yet the privileged action was
+**denied by the runtime**— precisely the boundary a bolt-on sandbox would add,
+already enforced. The agent adapts and reports that it couldn't install.
+
+!!! note "This is verified automatically— not just asserted"
+
+    The e2e suite's **Sandbox containment** stage
+    ([`tests/e2e.sh`](https://github.com/bigg01/claude-ci-agent/blob/main/tests/e2e.sh))
+    runs this exact scenario on every build: inside the image it attempts a package
+    install, a write to a system path, and a privilege escalation, and **fails the
+    build unless all three are denied**. With `ANTHROPIC_API_KEY` set it also has
+    Claude itself try to install software and asserts the sandbox blocks it:
+
+    ```text
+    ✓ install/escalation denied inside the rootless sandbox — CONTAINED uid=1001
+    ✓ Claude tried to install software and was blocked by the sandbox
+    ```
+
 ## How our solution compares
 
 Both the Anthropic and NVIDIA sandboxes exist to add an isolation boundary
