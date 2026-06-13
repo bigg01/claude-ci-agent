@@ -12,8 +12,8 @@ name: claude-agent
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-    paths: [Containerfile]      # rebuild the image when its inputs change
+    branches: [main]            # publish :latest + :<sha>
+    tags: ["v*"]                # release tag → also publish :<version>
   pull_request:                 # advisor personality
   issue_comment:                # agent personality ("@claude ...")
 
@@ -35,9 +35,15 @@ jobs:
       - name: Build & push agent image (Podman)
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          podman build -t "$AGENT_IMAGE:${GITHUB_SHA::8}" -t "$AGENT_IMAGE:latest" -f Containerfile .
-          podman push "$AGENT_IMAGE:${GITHUB_SHA::8}"
-          podman push "$AGENT_IMAGE:latest"
+          tags=("$AGENT_IMAGE:latest" "$AGENT_IMAGE:${GITHUB_SHA::8}")
+          # On a release tag (v1.2.3) also publish the bare version (1.2.3) so the
+          # Helm chart, GitLab component, and GitHub Action can pin to it.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tags+=("$AGENT_IMAGE:${GITHUB_REF_NAME}" "$AGENT_IMAGE:${GITHUB_REF_NAME#v}")
+          fi
+          build_args=(); for t in "${tags[@]}"; do build_args+=(-t "$t"); done
+          podman build "${build_args[@]}" -f Containerfile .
+          for t in "${tags[@]}"; do podman push "$t"; done
 
   # -------------------------------------------------------------------------
   # ADVISOR (read-only): review the PR diff. No write token — mutation is

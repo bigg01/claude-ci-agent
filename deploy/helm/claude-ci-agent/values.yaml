@@ -19,7 +19,9 @@ team: default
 
 image:
   repository: ghcr.io/bigg01/claude-ci-agent/claude-agent
-  tag: latest
+  # Empty → defaults to the chart's appVersion (this release). Override to pin a
+  # specific published tag (e.g. a commit SHA or "latest").
+  tag: ""
   pullPolicy: IfNotPresent
 
 serviceAccount:

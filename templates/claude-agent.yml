@@ -30,8 +30,10 @@ spec:
       default: test
       description: Pipeline stage the job runs in.
     image:
-      default: app-test
-      description: Container image providing the Claude Code CLI (the sandbox image).
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.1
+      description: >-
+        Container image providing the Claude Code CLI (the published sandbox
+        image). Pin to a released tag; override to your own registry mirror.
     prompt:
       description: The task prompt handed to the agent.
     api_key_variable:
