@@ -39,6 +39,71 @@ variables (`$GITLAB_CI` vs `$GITHUB_ACTIONS`) and behave accordingly.
     | **Builds** | Prefer Podman to mirror GitLab; fall back to Docker only if the workflow provisions it |
     | **Credentials** | Workflow-scoped `GITHUB_TOKEN`/secrets— do not read host OS env vars |
 
+## Setting the Anthropic API key
+
+The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store—
+**never** in the repo, the pipeline YAML, or a component/action input.
+
+=== "GitHub Actions"
+
+    **UI** — repo **Settings → Secrets and variables → Actions → New repository
+    secret** (or an **organization** secret to share across repos):
+
+    | Field | Value |
+    | --- | --- |
+    | Name | `ANTHROPIC_API_KEY` |
+    | Secret | your `sk-ant-…` key |
+
+    **CLI:**
+
+    ```sh
+    gh secret set ANTHROPIC_API_KEY            # prompts for the value
+    # or: gh secret set ANTHROPIC_API_KEY --body "sk-ant-..." --repo bigg01/your-repo
+    ```
+
+    **Use it** — pass it into the action via the `secrets` context (it's masked in
+    logs and only exposed to steps that reference it):
+
+    ```yaml
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.1
+      with:
+        prompt: "Fix the failing tests."
+        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    ```
+
+=== "GitLab CI"
+
+    **UI** — project (or **group**, to share across a team) **Settings → CI/CD →
+    Variables → Add variable**:
+
+    | Field | Value |
+    | --- | --- |
+    | Key | `ANTHROPIC_API_KEY` |
+    | Value | your `sk-ant-…` key |
+    | Flags | ✔ **Masked**, ✔ **Protected**, **Expand variable reference** off |
+
+    **CLI** ([`glab`](https://gitlab.com/gitlab-org/cli)):
+
+    ```sh
+    glab variable set ANTHROPIC_API_KEY "sk-ant-..." --masked --protected
+    ```
+
+    **Use it** — the [component](#gitlab-ci-using-the-claude-agent-component) reads
+    the variable **by name** (don't pass the key as an input); just include it:
+
+    ```yaml
+    include:
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.1
+        inputs:
+          prompt: "Fix the failing tests."
+    ```
+
+!!! warning "Protected variable ⇒ protected ref"
+
+    A GitLab **Protected** variable is only injected on **protected** branches/tags.
+    If a pipeline runs on an unprotected branch, `ANTHROPIC_API_KEY` is empty and the
+    job fails fast. Protect the branch, or drop the Protected flag for testing.
+
 ## Zero-credential environment
 
 The sandbox image ships with **no ambient credentials**— no global Git config,
