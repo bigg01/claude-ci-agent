@@ -8,8 +8,10 @@
 FROM quay.io/podman/stable:latest
 
 # 1. Node.js + npm are required to run the Claude Code CLI; python3 backs the
-#    OTel cost emitter (otel/emit_cost.py, standard library only).
-RUN dnf install -y nodejs npm git python3 && dnf clean all
+#    OTel cost emitter (otel/emit_cost.py, standard library only); jq + curl back
+#    the advisor/agent personalities (MR/PR notes, branch+MR/PR creation) used by
+#    the GitLab component and GitHub workflow.
+RUN dnf install -y nodejs npm git python3 jq curl && dnf clean all
 
 # 2. The image must run as a non-root user on BOTH platforms:
 #    - OpenShift assigns an arbitrary, non-root UID at runtime (e.g. 1000740000)
@@ -27,12 +29,22 @@ RUN mkdir -p /opt/npm-global /opt/agent-home /workspace \
     && chgrp -R 0 /opt/npm-global /opt/agent-home /workspace \
     && chmod -R g=u /opt/npm-global /opt/agent-home /workspace
 
-# 3. Verify Podman is present and the toolchain installed (build-time smoke test).
+# 3. Bake the CI helper assets into the image at a stable path. The GitLab
+#    component is `include:`d by OTHER projects that do NOT have this repo checked
+#    out, so it cannot reference otel/ or addons/ relative to the working tree —
+#    it references these baked copies instead. The GitHub workflow runs in this
+#    repo and can use either path. World-readable so an arbitrary OpenShift UID
+#    can still read them.
+COPY otel/emit_cost.py otel/otel-collector-config.yaml /opt/claude-ci/
+COPY addons/openbao/fetch-secrets.sh /opt/claude-ci/
+RUN chmod -R a+rX /opt/claude-ci
+
+# 4. Verify Podman is present and the toolchain installed (build-time smoke test).
 RUN podman --version && node --version && claude --version
 
 WORKDIR /workspace
 
-# 4. Default to a non-root UID with primary group root (GID 0). AKS uses this UID
+# 5. Default to a non-root UID with primary group root (GID 0). AKS uses this UID
 #    directly; OpenShift overrides it with its allocated UID — group-writable
 #    paths above keep both working.
 USER 1001:0

@@ -8,6 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] — 2026-06-13
+
+### Added
+- **GitLab component parity.** [`templates/claude-agent.yml`](templates/claude-agent.yml)
+  now ships **both personalities** as jobs, at parity with the GitHub workflow:
+  `claude-advisor` (read-only, runs on `merge_request_event`, posts the review as
+  an MR note) and `claude-agent` (read-write, runs on a non-empty `$CLAUDE_TASK`,
+  opens a new branch + MR). Both add an OTel Collector sidecar (nested Podman),
+  per-run cost emission, and the optional OpenBao OIDC secret fetch. New inputs:
+  `model`, `token_variable`, `team`, `bao_audience`; `prompt` is now optional.
+- Docs: "The whole loop as one `include:`" spec-driven example using the component.
+
+### Changed
+- The sandbox image ([`Containerfile`](Containerfile)) now installs `jq` + `curl`
+  and **bakes the CI helpers** (`emit_cost.py`, `otel-collector-config.yaml`,
+  `fetch-secrets.sh`) into `/opt/claude-ci/`, so the GitLab component works in
+  consuming projects that have no checkout of this repo.
+- Pinned chart/component/action/docs to `0.1.0-alpha.4`.
+
 ## [0.1.0-alpha.3] — 2026-06-13
 
 ### Added
@@ -53,7 +72,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.3...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.4...HEAD
+[0.1.0-alpha.4]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/bigg01/claude-ci-agent/releases/tag/v0.1.0-alpha.1

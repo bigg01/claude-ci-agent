@@ -1,69 +1,127 @@
 # GitLab CI/CD component: claude-agent
 #
-# Runs the Claude CI agent inside the rootless Podman sandbox image, with OTel
-# telemetry enabled. Defaults to bypass-permissions ("YOLO") mode, which is safe
-# here because the agent runs fully contained — see docs/yolo-mode.md.
+# Full parity with the GitHub Actions workflow (.github/workflows/claude-agent.yml):
+# two personalities, an OTel Collector sidecar, optional OpenBao secret fetch, and
+# per-run cost emission. Runs inside the rootless Podman sandbox image.
+#
+#   * claude-advisor — READ-ONLY. Runs on a merge_request_event: reviews the diff,
+#                      writes review.md, posts it back as an MR note. It is told
+#                      not to mutate; pass a non-bypass `claude_args` to enforce it
+#                      with real approvals if you don't trust the prompt alone.
+#   * claude-agent   — READ-WRITE. Runs when CLAUDE_TASK is set (GitLab has no
+#                      native "MR comment" pipeline trigger like GitHub's
+#                      issue_comment, so the task is supplied via the `prompt`
+#                      input or a CLAUDE_TASK pipeline variable from a manual run,
+#                      trigger token, or webhook). Applies the change on a new
+#                      branch and opens a NEW merge request — never pushes to the
+#                      default branch.
 #
 # Usage:
 #   include:
 #     - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@<version>
 #       inputs:
+#         # advisor needs no prompt; agent uses this (or a CLAUDE_TASK variable):
 #         prompt: "Fix the failing unit tests and commit the change."
 #
-# Before this component will run, the consuming team MUST provide their Anthropic
-# API key as a *masked, protected* CI/CD variable (Settings → CI/CD → Variables,
-# or at the group level to share one key across the whole team). The key is taken
-# by VARIABLE NAME — never as a component input — because component inputs are
-# interpolated as plaintext into the compiled pipeline and would leak the secret.
+# Required CI/CD variables (Settings → CI/CD → Variables; mask + protect secrets):
+#   ANTHROPIC_API_KEY        Your team's Anthropic key (name overridable via the
+#                            api_key_variable input). Taken by NAME, never as an
+#                            input — inputs interpolate as plaintext and would leak.
+#   GITLAB_TOKEN             Project/group access token (api scope) used to post MR
+#                            notes and open MRs. Name overridable via token_variable.
+#                            CI_JOB_TOKEN is NOT sufficient for these API calls.
+# Optional — telemetry export (no sidecar starts unless ELASTIC_OTLP_ENDPOINT set):
+#   ELASTIC_OTLP_ENDPOINT, ELASTIC_OTLP_AUTHORIZATION
+# Optional — OpenBao addon (mint secrets via this job's OIDC JWT, nothing stored):
+#   BAO_ADDR, BAO_ROLE, BAO_SECRET_PATH   (audience via the bao_audience input)
 #
-# HINT — prefer a short-lived, rotated key here, scoped to a dedicated Anthropic
-# workspace with a spend limit (or minted on demand via the OpenBao addon / OIDC
-# federation rather than stored). The API key is the one leaked credential that
-# bills straight to your account, and a CI variable is exposed to every job, log,
-# and cache — short-lived + workspace-scoped + spend-capped shrinks both the
-# window it stays valid and the blast radius if it leaks.
+# HINT — prefer a short-lived, rotated Anthropic key scoped to a dedicated
+# workspace with a spend limit (or minted on demand via the OpenBao addon). The
+# API key is the one leaked credential that bills straight to your account, and a
+# CI variable is exposed to every job, log, and cache — short-lived +
+# workspace-scoped + spend-capped shrinks both the window and the blast radius.
+#
+# NOTE — both jobs run nested Podman (the OTel sidecar) inside the sandbox image,
+# so the GitLab runner must permit rootless Podman (a privileged runner, or a
+# runner configured for rootless containers). This mirrors the GitHub workflow's
+# container job. If your runner cannot, set ELASTIC_OTLP_ENDPOINT empty to skip
+# the sidecar — the agent still runs; only the exported audit trail is lost.
 #
 # Reference: https://docs.gitlab.com/ee/ci/components/
 spec:
   inputs:
     stage:
       default: test
-      description: Pipeline stage the job runs in.
+      description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.3
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.4
       description: >-
-        Container image providing the Claude Code CLI (the published sandbox
-        image). Pin to a released tag; override to your own registry mirror.
+        Container image providing the Claude Code CLI + baked CI helpers (the
+        published sandbox image). Pin to a released tag; override to a mirror.
     prompt:
-      description: The task prompt handed to the agent.
+      default: ""
+      description: >-
+        Task handed to the AGENT personality. Leave empty for advisor-only use;
+        a CLAUDE_TASK pipeline variable overrides it for ad-hoc agent runs.
+    model:
+      default: "claude-sonnet-4-6"
+      description: Claude model id passed to `claude --model`.
     api_key_variable:
       default: "ANTHROPIC_API_KEY"
       description: >-
-        Name of the masked, protected CI/CD variable that holds your team's
-        Anthropic API key. Create it under Settings → CI/CD → Variables (or at
-        the group level to share it across the team), then set this to its name
-        if it differs from the default. Pass the variable NAME here, not the key
-        itself. The job fails fast with instructions if the variable is unset.
+        Name of the masked, protected CI/CD variable holding your Anthropic API
+        key. Pass the variable NAME here, not the key. The job fails fast with
+        instructions if it is unset.
+    token_variable:
+      default: "GITLAB_TOKEN"
+      description: >-
+        Name of the CI/CD variable holding a GitLab token (api scope) used to
+        post MR notes (advisor) and open MRs (agent). Pass the NAME, not the token.
     claude_args:
       default: "--dangerously-skip-permissions"
       description: >-
-        Extra flags passed to the `claude` CLI. Defaults to bypass-permissions
-        mode; set to an empty string to require approvals.
+        Extra flags passed to `claude`. Defaults to bypass-permissions ("YOLO")
+        mode, safe because the agent runs fully contained — see docs/yolo-mode.md.
+        Set to an empty string to require approvals.
     otel_endpoint:
       default: "http://localhost:4318"
-      description: OTLP endpoint of the OTel Collector sidecar.
+      description: OTLP endpoint the agent exports to (the sidecar listens here).
+    team:
+      default: "default"
+      description: team.name resource attribute, for per-team cost attribution.
+    bao_audience:
+      default: "$CI_SERVER_URL"
+      description: >-
+        Audience (aud) of the OIDC JWT minted for the OpenBao addon. Default is
+        your GitLab URL; set to whatever your OpenBao JWT role expects.
 ---
-"claude-agent":
+# ---------------------------------------------------------------------------
+# Shared base — secret resolution, optional OpenBao fetch, OTel sidecar, OTel
+# env, and teardown. Hidden (.) so it never materializes as a job itself.
+# ---------------------------------------------------------------------------
+".claude-base":
   stage: $[[ inputs.stage ]]
   image: $[[ inputs.image ]]
   variables:
+    CLAUDE_MODEL: $[[ inputs.model ]]
     CLAUDE_CODE_ENABLE_TELEMETRY: "1"
     OTEL_LOG_TOOL_CONTENT: "1"
+    OTEL_METRICS_EXPORTER: otlp
+    OTEL_LOGS_EXPORTER: otlp
+    OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     OTEL_EXPORTER_OTLP_ENDPOINT: $[[ inputs.otel_endpoint ]]
+    # Short CI jobs exit before the 60s default flush — shorten it so the built-in
+    # claude_code.cost.usage metric is exported, and tag the CI context.
+    OTEL_METRIC_EXPORT_INTERVAL: "5000"
+    OTEL_RESOURCE_ATTRIBUTES: "ci.system=gitlab,ci.pipeline.id=$CI_PIPELINE_ID,vcs.repository=$CI_PROJECT_PATH,vcs.ref=$CI_COMMIT_REF_NAME,vcs.revision=$CI_COMMIT_SHA,team.name=$[[ inputs.team ]]"
+  # GitLab mints this OIDC JWT for the job; the OpenBao addon exchanges it for a
+  # short-lived token (no static OpenBao credential is ever stored).
+  id_tokens:
+    BAO_JWT:
+      aud: $[[ inputs.bao_audience ]]
   before_script:
-    # Resolve the team's Anthropic key from the named CI/CD variable (indirect,
-    # so a custom/group-level variable name works too) and fail fast with
-    # instructions if the team has not provided it.
+    # 1. Resolve the Anthropic key from the named variable (indirect, so a custom
+    #    or group-level variable name works), fail fast with instructions if unset.
     - |
       KEY_VAR="$[[ inputs.api_key_variable ]]"
       eval "KEY_VALUE=\${$KEY_VAR:-}"
@@ -75,6 +133,115 @@ spec:
         exit 1
       fi
       export ANTHROPIC_API_KEY="$KEY_VALUE"
+    # 2. Optional OpenBao fetch — no-op unless BAO_ADDR is set. Sourced secrets
+    #    (e.g. ELASTIC_*, GITLAB_TOKEN) become available to the rest of the job.
+    - |
+      if [ -n "${BAO_ADDR:-}" ]; then
+        sh /opt/claude-ci/fetch-secrets.sh
+        [ -f bao.env ] && { set -a; . ./bao.env; set +a; rm -f bao.env; }
+      fi
+    # 3. Start the OTel Collector sidecar (nested Podman, shares the job network)
+    #    only when an Elastic endpoint is configured — otherwise skip it; the
+    #    agent's best-effort export to localhost:4318 just no-ops.
+    - |
+      if [ -n "${ELASTIC_OTLP_ENDPOINT:-}" ]; then
+        podman run -d --name otel-collector --network host \
+          -e ELASTIC_OTLP_ENDPOINT -e ELASTIC_OTLP_AUTHORIZATION \
+          -v /opt/claude-ci/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro,Z \
+          docker.io/otel/opentelemetry-collector-contrib:latest \
+          --config /etc/otelcol/config.yaml
+      else
+        echo "ELASTIC_OTLP_ENDPOINT unset — skipping OTel sidecar (no export)." >&2
+      fi
+  after_script:
+    # Flush before teardown: wait out the collector batch timeout (5s) + metric
+    # export interval (5s) so the final datapoints reach Elastic, then stop it.
+    - |
+      if podman container exists otel-collector 2>/dev/null; then
+        sleep 10
+        podman logs otel-collector || true
+        podman stop otel-collector || true
+      fi
+
+# ---------------------------------------------------------------------------
+# ADVISOR (read-only): review the MR diff and post the review as an MR note.
+# ---------------------------------------------------------------------------
+"claude-advisor":
+  extends: ".claude-base"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
-    - claude --version
-    - claude $[[ inputs.claude_args ]] -p "$[[ inputs.prompt ]]"
+    - |
+      claude -p "You are the ADVISOR personality (read-only). Review this merge \
+      request against the repository's conventions (CLAUDE.md / CONTRIBUTING if \
+      present). Run linters and tests, flag bugs and risks, and write your review \
+      to review.md. You MUST NOT modify project files, commit, or push — recommend \
+      changes, do not apply them." \
+        --model "$CLAUDE_MODEL" $[[ inputs.claude_args ]] \
+        --output-format json > claude-result.json
+    - python3 /opt/claude-ci/emit_cost.py claude-result.json || true
+    - |
+      test -f review.md || echo "Advisor produced no review.md." > review.md
+      TOKEN_VAR="$[[ inputs.token_variable ]]"
+      eval "GL_TOKEN=\${$TOKEN_VAR:-}"
+      if [ -n "$GL_TOKEN" ] && [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+        jq -Rs '{body: .}' review.md | \
+          curl -sS -X POST \
+            -H "PRIVATE-TOKEN: $GL_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" \
+            -d @-
+      else
+        echo "No $TOKEN_VAR or MR IID — echoing review to the job log instead:" >&2
+        cat review.md
+      fi
+
+# ---------------------------------------------------------------------------
+# AGENT (read-write): apply the task on a new branch and open a NEW merge
+# request. Triggered by a non-empty CLAUDE_TASK (the `prompt` input, or a
+# pipeline variable from a manual run / trigger token / webhook).
+# ---------------------------------------------------------------------------
+"claude-agent":
+  extends: ".claude-base"
+  variables:
+    # Default the task to the prompt input; a CLAUDE_TASK pipeline variable
+    # (manual/trigger/webhook) takes precedence over this job-level default.
+    CLAUDE_TASK: $[[ inputs.prompt ]]
+  rules:
+    - if: '$CLAUDE_TASK != ""'
+  script:
+    - |
+      claude -p "You are the AGENT personality (read-write). Task: $CLAUDE_TASK. \
+      Work per the repository's conventions, and make atomic, conventional-commit- \
+      style changes." \
+        --model "$CLAUDE_MODEL" $[[ inputs.claude_args ]] \
+        --output-format json > claude-result.json
+    - python3 /opt/claude-ci/emit_cost.py claude-result.json || true
+    - |
+      TOKEN_VAR="$[[ inputs.token_variable ]]"
+      eval "GL_TOKEN=\${$TOKEN_VAR:-}"
+      if [ -z "$GL_TOKEN" ]; then
+        echo "ERROR: \$$TOKEN_VAR (api scope) is required to push a branch and open an MR." >&2
+        exit 1
+      fi
+      git config user.email "claude-agent@ci.local"
+      git config user.name "Claude CI Agent"
+      BRANCH="claude/task-${CI_PIPELINE_ID}"
+      git checkout -b "$BRANCH"
+      git add -A
+      if git diff --cached --quiet; then
+        echo "Agent made no changes — nothing to push." >&2
+        exit 0
+      fi
+      git commit -m "feat: automated change by Claude agent"
+      git push "https://oauth2:${GL_TOKEN}@${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}.git" "$BRANCH"
+      jq -n \
+        --arg s "$BRANCH" \
+        --arg t "${CI_DEFAULT_BRANCH:-main}" \
+        --arg title "Claude agent: $CLAUDE_TASK" \
+        '{source_branch: $s, target_branch: $t, title: $title, description: "Automated change opened by the Claude CI agent.", remove_source_branch: true}' | \
+        curl -sS -X POST \
+          -H "PRIVATE-TOKEN: $GL_TOKEN" \
+          -H "Content-Type: application/json" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests" \
+          -d @-

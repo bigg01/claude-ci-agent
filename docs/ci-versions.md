@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.3
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.4
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.3
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -185,7 +185,12 @@ fi
 
 ## Personalities & triggers
 
-The same image runs as one of two personalities, selected by the CI trigger:
+The same image runs as one of two personalities, selected by the CI trigger. On
+GitLab both are shipped **by the component** as two jobs — `claude-advisor`
+(gated on `merge_request_event`) and `claude-agent` (gated on a non-empty
+`$CLAUDE_TASK`) — so a single `include:` wires up the full flow; you don't
+hand-write them (see [Example pipelines](#gitlab-ci-using-the-claude-agent-component)).
+On GitHub the analog is the event-driven [workflow](https://github.com/bigg01/claude-ci-agent/blob/main/.github/workflows/claude-agent.yml).
 
 === "Agent— read-write"
 
@@ -276,9 +281,28 @@ Claude-Model: claude-sonnet-4-6
 A reusable [GitLab CI/CD component](https://docs.gitlab.com/ee/ci/components/)
 ships with this project at
 [`templates/claude-agent.yml`](https://github.com/bigg01/claude-ci-agent/blob/main/templates/claude-agent.yml).
-It runs the agent inside the sandbox image with OTel telemetry enabled and
-defaults to bypass-permissions ("YOLO") mode— safe here because the agent is
-[fully contained](yolo-mode.md).
+A single `include:` adds **both personalities** as jobs — at parity with the
+GitHub workflow:
+
+- **`claude-advisor`** (read-only) runs automatically on every
+  `merge_request_event`: it reviews the diff and posts the verdict as an MR note.
+- **`claude-agent`** (read-write) runs when `$CLAUDE_TASK` is non-empty (from the
+  `prompt` input, or a pipeline variable supplied by a manual run / trigger token
+  / webhook — GitLab has no native "MR comment" trigger): it applies the change
+  on a new branch and opens a **new MR**, never the default branch.
+
+Both jobs start an **OTel Collector sidecar** (nested Podman) when
+`ELASTIC_OTLP_ENDPOINT` is set, emit per-run cost, optionally fetch secrets via
+the [OpenBao addon](secrets-openbao.md), and default to bypass-permissions
+("YOLO") mode — safe here because the agent is [fully contained](yolo-mode.md).
+
+!!! note "Runner must allow nested Podman"
+
+    The OTel sidecar runs as nested rootless Podman inside the sandbox image
+    (the choice that mirrors the GitHub container job). Use a privileged or
+    rootless-Podman-capable runner. If yours can't, leave `ELASTIC_OTLP_ENDPOINT`
+    unset to skip the sidecar — the agent still runs; only the exported audit
+    trail is lost.
 
 **Step 1 — set the Anthropic key as a CI/CD variable** (this is how the key is
 provided; it is **never** a component input). In the consuming project (or group):
@@ -297,7 +321,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.3
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -309,7 +333,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.3` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.4` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable ⇒ protected ref"
 
@@ -321,12 +345,16 @@ The component reads the variable **by name** at runtime and exports it for the
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `stage` | `test` | Pipeline stage the job runs in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.3` | Published sandbox image providing the Claude Code CLI. |
-| `prompt` | *(required)* | The task prompt handed to the agent. |
+| `stage` | `test` | Pipeline stage both jobs run in. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.4` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
+| `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
+| `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
+| `token_variable` | `GITLAB_TOKEN` | **Name** of the variable holding a GitLab token (`api` scope) used to post MR notes (advisor) and open MRs (agent). `CI_JOB_TOKEN` is not sufficient. |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
-| `otel_endpoint` | `http://localhost:4318` | OTLP endpoint of the OTel Collector sidecar. |
+| `otel_endpoint` | `http://localhost:4318` | OTLP endpoint the agent exports to (the sidecar listens here). |
+| `team` | `default` | `team.name` resource attribute, for per-team cost attribution. |
+| `bao_audience` | `$CI_SERVER_URL` | Audience (`aud`) of the OIDC JWT minted for the optional [OpenBao addon](secrets-openbao.md). |
 
 !!! warning "Provide the key as a variable, not an input"
 
@@ -420,7 +448,7 @@ Set as CI/CD variables (masked/protected, or minted at runtime by the
 stages: [implement, review]
 
 variables:
-  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.3
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.4
   CLAUDE_MODEL: "claude-sonnet-4-6"
   CLAUDE_CODE_ENABLE_TELEMETRY: "1"
   OTEL_LOG_TOOL_CONTENT: "1"
