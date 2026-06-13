@@ -1,0 +1,44 @@
+# Release packaging — on every v* tag, package the Helm chart and publish it as
+# part of the release: attach the .tgz to the GitHub Release AND push it to GHCR
+# as an OCI artifact (oci://ghcr.io/<owner>/charts/claude-ci-agent).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create / update the release and upload assets
+  packages: write   # push the chart to GHCR as an OCI artifact
+
+jobs:
+  helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: Package chart at the release version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"   # v0.1.0-alpha.1 -> 0.1.0-alpha.1
+          helm lint deploy/helm/claude-ci-agent
+          helm package deploy/helm/claude-ci-agent \
+            --version "$VERSION" --app-version "$VERSION" -d dist
+          ls -l dist
+
+      - name: Attach the chart to the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Prerelease when the tag carries a semver pre-release suffix (e.g. -alpha.1).
+          case "$TAG" in *-*) PRE="--prerelease";; *) PRE="";; esac
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" $PRE --generate-notes --title "$TAG"
+          gh release upload "$TAG" dist/*.tgz --clobber
+
+      - name: Push the chart to GHCR (OCI)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push dist/*.tgz "oci://ghcr.io/${{ github.repository_owner }}/charts"
