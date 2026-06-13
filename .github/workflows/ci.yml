@@ -85,3 +85,31 @@ jobs:
         run: |
           trivy fs --scanners vuln --severity CRITICAL,HIGH \
             --ignore-unfixed --exit-code 1 --no-progress .
+
+  # ---- Image scan (non-blocking, reports to the Security tab) ------------- #
+  image-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'   # skip on (fork) PRs — SARIF upload needs write
+    permissions:
+      contents: read
+      security-events: write          # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+      - name: Scan the published agent image (does not fail the build)
+        # Surfaces base-OS CVEs in the published image for visibility — informational,
+        # so it never blocks. The fs gate above is the blocking dependency check.
+        run: |
+          trivy image --no-progress --ignore-unfixed \
+            --severity CRITICAL,HIGH,MEDIUM \
+            --format sarif --output trivy-image.sarif \
+            ghcr.io/${{ github.repository }}/claude-agent:latest || true
+      - name: Upload results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
