@@ -136,6 +136,53 @@ flowchart LR
   V -->|PASS| H["Human merges"]
 ```
 
+## The whole loop as one `include:` (GitLab)
+
+Because the [component](ci-versions.md#gitlab-ci-using-the-claude-agent-component)
+ships **both personalities**, the entire spec-driven loop is a single `include:` —
+no hand-written advisor/agent jobs. The `claude-advisor` job auto-runs on every
+merge request; the `claude-agent` job runs whenever you hand it a task. Drop this
+in the consuming project's `.gitlab-ci.yml`:
+
+```yaml
+stages:
+  - test
+
+include:
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
+    inputs:
+      # The AGENT implements this spec on a new branch + MR. Runs only when this
+      # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
+      prompt: >-
+        Implement the specification in spec/export-csv.md exactly. Satisfy every
+        acceptance criterion, add the tests it requires, and follow CLAUDE.MD.
+        Do not implement anything listed under "Out of scope".
+      # Independent reviewer: grade with a different model than the agent writes with.
+      model: "claude-sonnet-4-6"
+```
+
+That's the whole pipeline. What you get from the one include:
+
+| Job | Runs when | Does |
+| --- | --- | --- |
+| `claude-agent` | `prompt` (or `$CLAUDE_TASK`) is non-empty | Implements `spec/export-csv.md`, commits, opens a **new MR** |
+| `claude-advisor` | the resulting **merge request** opens / updates | Grades the diff against the spec, posts the verdict as an **MR note** |
+
+**Required CI/CD variables** (Settings → CI/CD → Variables; mask + protect):
+`ANTHROPIC_API_KEY` and a `GITLAB_TOKEN` with `api` scope (the agent uses it to
+push the branch and open the MR; the advisor uses it to post the note). Set
+`ELASTIC_OTLP_ENDPOINT` / `ELASTIC_OTLP_AUTHORIZATION` to stream the
+[per-run cost](observability.md#per-run-cost) and secret-scrubbed audit trail to
+Elastic.
+
+!!! tip "Grade the advisor against the spec, not in the abstract"
+
+    The component's advisor prompt already says "review against the repository's
+    conventions"; for a spec-graded verdict, keep the spec file in the repo (the
+    advisor reads the working tree) and reference it by name in your acceptance
+    criteria. To customize the advisor's wording further, fork the component or use
+    the hand-written jobs shown under [Triggering from Jira](#triggering-from-jira-with-gitlab).
+
 ## Triggering from Jira (with GitLab)
 
 When GitLab is your SCM and **Jira** is your tracker, the **Jira issue is the
