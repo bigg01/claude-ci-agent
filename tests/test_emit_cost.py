@@ -112,6 +112,50 @@ def test_build_payload_tokens_by_type(emit_cost, clean_ci_env):
     assert kinds == {"input", "output"}
 
 
+def test_model_from_result_model_field(emit_cost, clean_ci_env):
+    assert emit_cost._model({"model": "claude-opus-4-8"}) == "claude-opus-4-8"
+
+
+def test_model_from_model_usage(emit_cost, clean_ci_env):
+    assert emit_cost._model({"modelUsage": {"claude-sonnet-4-6": {"in": 1}}}) == "claude-sonnet-4-6"
+
+
+def test_model_falls_back_to_env(emit_cost, clean_ci_env):
+    clean_ci_env.setenv("CLAUDE_MODEL", "claude-haiku-4-5")
+    assert emit_cost._model({}) == "claude-haiku-4-5"
+
+
+def test_model_unknown_when_nothing(emit_cost, clean_ci_env):
+    assert emit_cost._model({}) == "unknown"
+
+
+def test_git_metadata_returns_commit_in_repo(emit_cost):
+    # Tests run inside the git checkout, so a commit sha should be present.
+    meta = emit_cost._git_metadata()
+    assert isinstance(meta, dict)
+    if meta:  # empty only if git is unavailable
+        assert len(meta["git.commit.sha"]) == 40
+        assert meta["git.commit.short"] == meta["git.commit.sha"][:8]
+
+
+def test_git_helper_handles_missing_git(emit_cost, monkeypatch):
+    def boom(*a, **k):
+        raise FileNotFoundError("no git")
+    monkeypatch.setattr(emit_cost.subprocess, "run", boom)
+    assert emit_cost._git("rev-parse", "HEAD") == ""
+    assert emit_cost._git_metadata() == {}
+
+
+def test_build_payload_tags_model_and_commit(emit_cost, clean_ci_env, monkeypatch):
+    monkeypatch.setattr(emit_cost, "_git_metadata",
+                        lambda: {"git.commit.sha": "abc123", "git.commit.short": "abc123"})
+    payload = emit_cost._build_payload({"total_cost_usd": 1.0, "model": "claude-opus-4-8"})
+    dp = _metrics(payload)[0]["gauge"]["dataPoints"][0]
+    kv = {a["key"]: a["value"] for a in dp["attributes"]}
+    assert kv["claude.model"]["stringValue"] == "claude-opus-4-8"
+    assert kv["git.commit.sha"]["stringValue"] == "abc123"
+
+
 def test_build_payload_resource_service_name(emit_cost, clean_ci_env):
     payload = emit_cost._build_payload({"total_cost_usd": 1.0})
     res_attrs = payload["resourceMetrics"][0]["resource"]["attributes"]
@@ -124,11 +168,13 @@ def test_build_payload_empty_when_no_cost_fields(emit_cost, clean_ci_env):
 
 
 def test_build_payload_drops_blank_attrs(emit_cost, clean_ci_env):
-    # CLAUDE_MODEL is blank by default — it must not appear as an attribute.
+    # Absent optional fields (e.g. session id) must not appear; model defaults
+    # to "unknown" rather than an empty attribute.
     payload = emit_cost._build_payload({"total_cost_usd": 1.0})
     dp = _metrics(payload)[0]["gauge"]["dataPoints"][0]
-    keys = {a["key"] for a in dp["attributes"]}
-    assert "claude.model" not in keys
+    kv = {a["key"]: a["value"] for a in dp["attributes"]}
+    assert "claude.session.id" not in kv
+    assert kv["claude.model"]["stringValue"] == "unknown"
 
 
 # --------------------------------------------------------------------------- #
