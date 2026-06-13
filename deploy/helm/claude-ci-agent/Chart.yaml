@@ -1,0 +1,13 @@
+apiVersion: v2
+name: claude-ci-agent
+description: >-
+  Claude CI agent and its per-team OTel Collector for Kubernetes — portable across
+  AKS and OpenShift, with optional OpenBao secret injection and cert-manager TLS.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords: [claude, ci, otel, openbao, cert-manager, aks, openshift]
+maintainers:
+  - name: bigg01
+sources:
+  - https://github.com/bigg01/claude-ci-agent

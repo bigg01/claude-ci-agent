@@ -1,0 +1,66 @@
+{{- /* Optional external exposure of the collector — Route on OpenShift, Ingress on AKS. */ -}}
+{{- if and .Values.collector.enabled .Values.route.enabled }}
+{{- if ne .Values.platform "ocp" }}
+{{- fail "route.enabled=true is only valid on OpenShift (platform: ocp); use ingress on AKS" }}
+{{- end }}
+# OpenShift Route — TLS terminated by cert-manager's serving cert when enabled.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "claude.collectorName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "claude.collectorName" . }}
+  port:
+    targetPort: otlp-http
+  {{- if .Values.certManager.enabled }}
+  tls:
+    termination: passthrough
+  {{- end }}
+{{- end }}
+{{- if and .Values.collector.enabled .Values.ingress.enabled }}
+{{- if eq .Values.platform "ocp" }}
+{{- fail "ingress.enabled=true is for AKS/standard Kubernetes; use route on OpenShift (platform: ocp)" }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "claude.collectorName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "claude.collectorName" . }}
+                port:
+                  name: otlp-http
+  {{- if .Values.certManager.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ include "claude.collectorName" . }}-tls
+  {{- end }}
+{{- end }}

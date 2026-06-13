@@ -1,0 +1,83 @@
+{{- if .Values.collector.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "claude.collectorName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:{{ .Values.collector.service.otlpHttpPort }}
+            {{- if .Values.certManager.enabled }}
+            tls:
+              cert_file: /etc/otel/tls/tls.crt
+              key_file: /etc/otel/tls/tls.key
+            {{- end }}
+          grpc:
+            endpoint: 0.0.0.0:{{ .Values.collector.service.otlpGrpcPort }}
+            {{- if .Values.certManager.enabled }}
+            tls:
+              cert_file: /etc/otel/tls/tls.crt
+              key_file: /etc/otel/tls/tls.key
+            {{- end }}
+
+    processors:
+      batch:
+        timeout: 2s
+      # Stamp the owning team on every record regardless of what the run claimed —
+      # this collector belongs to one team.
+      transform/team:
+        error_mode: ignore
+        log_statements: &stamp
+          - context: resource
+            statements:
+              - set(attributes["team.name"], "${env:OTEL_TEAM}")
+        trace_statements: *stamp
+        metric_statements: *stamp
+      transform/scrub:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - replace_pattern(body, "(?i)(api[_-]?key|token|secret|password|bearer)\\s*[=:]\\s*\\S+", "$$1=***REDACTED***")
+              - replace_pattern(body, "sk-ant-[A-Za-z0-9_-]+", "***REDACTED_ANTHROPIC_KEY***")
+              - replace_pattern(body, "gh[pousr]_[A-Za-z0-9]+", "***REDACTED_GITHUB_TOKEN***")
+      attributes/scrub:
+        actions:
+          - { key: anthropic.api_key, action: delete }
+          - { key: authorization, action: delete }
+          - { key: env.ANTHROPIC_API_KEY, action: delete }
+          - { key: env.GITHUB_TOKEN, action: delete }
+
+    exporters:
+      elasticsearch:
+        endpoints: ["${env:ES_ENDPOINT}"]
+        logs_index: "claude-agent-${env:OTEL_TEAM}-logs"
+        traces_index: "claude-agent-${env:OTEL_TEAM}-traces"
+        metrics_index: "claude-agent-${env:OTEL_TEAM}-metrics"
+      debug:
+        verbosity: basic
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [transform/team, transform/scrub, attributes/scrub, batch]
+          exporters: [elasticsearch, debug]
+        traces:
+          receivers: [otlp]
+          processors: [transform/team, attributes/scrub, batch]
+          exporters: [elasticsearch]
+        metrics:
+          receivers: [otlp]
+          processors: [transform/team, attributes/scrub, batch]
+          exporters: [elasticsearch]
+      telemetry:
+        logs:
+          level: warn
+{{- end }}

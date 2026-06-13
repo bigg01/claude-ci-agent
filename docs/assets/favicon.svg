@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Claude CI Agent">
+  <title>Claude CI Agent</title>
+  <defs>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd9a8"/>
+      <stop offset="45%" stop-color="#ff9d2e"/>
+      <stop offset="100%" stop-color="#ff7a00"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="2" y="2" width="124" height="124" rx="26" fill="#03060b" stroke="#0fb6cc" stroke-width="2"/>
+
+  <polygon points="64,16 106,40 106,88 64,112 22,88 22,40"
+           fill="none" stroke="#25e8ff" stroke-width="3.4" stroke-linejoin="round"/>
+
+  <g stroke="#25e8ff" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M36 50 H50 V60"/>
+    <path d="M36 78 H50 V68"/>
+    <path d="M78 64 H96"/>
+  </g>
+  <circle cx="36" cy="50" r="4" fill="#25e8ff"/>
+  <circle cx="36" cy="78" r="4" fill="#25e8ff"/>
+  <circle cx="96" cy="64" r="5" fill="#ff9d2e"/>
+
+  <circle cx="64" cy="64" r="14" fill="none" stroke="#25e8ff" stroke-width="2.6"/>
+  <g stroke="url(#core)" stroke-width="3.4" stroke-linecap="round">
+    <line x1="64" y1="52" x2="64" y2="76"/>
+    <line x1="52" y1="64" x2="76" y2="64"/>
+    <line x1="55.5" y1="55.5" x2="72.5" y2="72.5"/>
+    <line x1="72.5" y1="55.5" x2="55.5" y2="72.5"/>
+  </g>
+  <circle cx="64" cy="64" r="3.2" fill="#ffd9a8"/>
+</svg>

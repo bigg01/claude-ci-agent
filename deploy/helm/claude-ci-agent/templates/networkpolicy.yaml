@@ -1,0 +1,41 @@
+{{- if .Values.networkPolicy.enabled -}}
+# Default-deny for the agent, with egress to DNS, HTTPS (Anthropic API), and the
+# in-cluster collector's OTLP ports. Standard Kubernetes NetworkPolicy — enforced
+# by OVN-Kubernetes on OpenShift and by Azure NPM / Calico / Cilium on AKS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "claude.fullname" . }}-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: agent
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: []
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # OTLP to the team collector (same namespace).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: otel-collector
+      ports:
+        - { protocol: TCP, port: {{ .Values.collector.service.otlpHttpPort }} }
+        - { protocol: TCP, port: {{ .Values.collector.service.otlpGrpcPort }} }
+    # Outbound HTTPS — Anthropic API (and OpenBao, if used). Tighten the CIDR or
+    # front via a proxy to lock down further. Metadata IP is blocked.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["169.254.0.0/16"]
+      ports:
+        - { protocol: TCP, port: 443 }
+{{- end }}

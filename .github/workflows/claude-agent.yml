@@ -1,0 +1,229 @@
+# GitHub Actions — Claude CI agent, mirroring the GitLab path (Podman-first).
+#
+# Generated from input/gemini.md + input/agents.md, reconciled with CLAUDE.MD.
+# Same prebuilt-image split, plus the two personalities:
+#   * build-image — bake the agent image (Containerfile) and push to GHCR.
+#   * advisor     — READ-ONLY. Runs on PR open/sync: review only, posts a comment,
+#                   never mutates (contents: read — no write token is issued).
+#   * agent       — READ-WRITE. Runs on a "@claude ..." comment: applies a fix,
+#                   commits, and opens a NEW PR branch (contents: write).
+name: claude-agent
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [Containerfile]      # rebuild the image when its inputs change
+  pull_request:                 # advisor personality
+  issue_comment:                # agent personality ("@claude ...")
+
+env:
+  AGENT_IMAGE: ghcr.io/${{ github.repository }}/claude-agent
+
+jobs:
+  # -------------------------------------------------------------------------
+  # BUILD: bake and publish the agent image (only when its inputs change).
+  # -------------------------------------------------------------------------
+  build-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & push agent image (Podman)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          podman build -t "$AGENT_IMAGE:${GITHUB_SHA::8}" -t "$AGENT_IMAGE:latest" -f Containerfile .
+          podman push "$AGENT_IMAGE:${GITHUB_SHA::8}"
+          podman push "$AGENT_IMAGE:latest"
+
+  # -------------------------------------------------------------------------
+  # ADVISOR (read-only): review the PR diff. No write token — mutation is
+  # impossible even if attempted. Posts the review back as a PR comment.
+  # -------------------------------------------------------------------------
+  advisor:
+    if: github.event_name == 'pull_request'
+    needs: build-image
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write          # mint the OIDC JWT for the OpenBao addon
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository }}/claude-agent:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --network host
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'claude-sonnet-4-6' }}
+      CLAUDE_PERSONALITY: advisor
+      CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+      OTEL_LOG_TOOL_CONTENT: "1"
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+      # Short CI jobs exit before the 60s default flush — shorten it so the
+      # built-in claude_code.cost.usage metric is exported, and tag CI context.
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"
+      OTEL_RESOURCE_ATTRIBUTES: "ci.system=github,ci.pipeline.id=${{ github.run_id }},vcs.repository=${{ github.repository }},vcs.ref=${{ github.ref_name }},vcs.revision=${{ github.sha }},team.name=${{ vars.OTEL_TEAM || 'default' }}"
+      ELASTIC_OTLP_ENDPOINT: ${{ secrets.ELASTIC_OTLP_ENDPOINT }}
+      ELASTIC_OTLP_AUTHORIZATION: ${{ secrets.ELASTIC_OTLP_AUTHORIZATION }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      # OpenBao addon (optional) — set these repo/org variables to enable.
+      BAO_ADDR: ${{ vars.BAO_ADDR }}
+      BAO_ROLE: ${{ vars.BAO_ROLE }}
+      BAO_SECRET_PATH: ${{ vars.BAO_SECRET_PATH }}
+      BAO_AUDIENCE: ${{ vars.BAO_AUDIENCE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch secrets from OpenBao (optional)
+        if: env.BAO_ADDR != ''
+        run: |
+          BAO_JWT="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$BAO_AUDIENCE" \
+            | python3 -c 'import sys, json; print(json.load(sys.stdin)["value"])')"
+          export BAO_JWT
+          sh addons/openbao/fetch-secrets.sh
+      - name: Start OTel Collector sidecar (Podman, shares host network)
+        run: |
+          [ -f bao.env ] && . ./bao.env || true
+          podman run -d --name otel-collector --network host \
+            -e ELASTIC_OTLP_ENDPOINT -e ELASTIC_OTLP_AUTHORIZATION \
+            -v "$PWD/otel/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro,Z" \
+            docker.io/otel/opentelemetry-collector-contrib:latest \
+            --config /etc/otelcol/config.yaml
+      - name: Review (read-only)
+        run: |
+          [ -f bao.env ] && . ./bao.env || true
+          claude -p "You are the ADVISOR personality (read-only). Review this pull \
+          request against CLAUDE.MD. Run linters and tests, flag bugs and risks, and \
+          write your review to review.md. You MUST NOT modify project files, commit, \
+          or push — recommend changes, do not apply them." \
+            --model "$CLAUDE_MODEL" \
+            --permission-mode bypassPermissions \
+            --dangerously-skip-permissions \
+            --output-format json > claude-result.json
+      - name: Push run cost to OTel (best-effort)
+        run: python3 otel/emit_cost.py claude-result.json || true
+      - name: Post review as a PR comment
+        run: |
+          test -f review.md || echo "Advisor produced no review.md." > review.md
+          jq -Rs '{body: .}' review.md | \
+            curl -sS -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -d @-
+      - name: Flush + stop OTel Collector
+        if: always()
+        run: |
+          # Wait for the collector's batch processor (5s timeout) and the metric
+          # export interval (5s) to push the last datapoints to Elastic before
+          # we tear the sidecar down — otherwise the final export is cut off.
+          sleep 10
+          podman logs otel-collector || true
+          podman stop otel-collector || true
+
+  # -------------------------------------------------------------------------
+  # AGENT (read-write): triggered by a "@claude ..." comment. Applies a fix and
+  # opens a NEW PR branch — never pushes to the default branch.
+  # -------------------------------------------------------------------------
+  agent:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')
+    needs: build-image
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write          # mint the OIDC JWT for the OpenBao addon
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository }}/claude-agent:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --network host
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'claude-sonnet-4-6' }}
+      CLAUDE_PERSONALITY: agent
+      CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+      OTEL_LOG_TOOL_CONTENT: "1"
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+      # Short CI jobs exit before the 60s default flush — shorten it so the
+      # built-in claude_code.cost.usage metric is exported, and tag CI context.
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"
+      OTEL_RESOURCE_ATTRIBUTES: "ci.system=github,ci.pipeline.id=${{ github.run_id }},vcs.repository=${{ github.repository }},vcs.ref=${{ github.ref_name }},vcs.revision=${{ github.sha }},team.name=${{ vars.OTEL_TEAM || 'default' }}"
+      ELASTIC_OTLP_ENDPOINT: ${{ secrets.ELASTIC_OTLP_ENDPOINT }}
+      ELASTIC_OTLP_AUTHORIZATION: ${{ secrets.ELASTIC_OTLP_AUTHORIZATION }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      # The comment body is passed via env (never inlined) to avoid script injection.
+      CLAUDE_TASK: ${{ github.event.comment.body }}
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      # OpenBao addon (optional) — set these repo/org variables to enable.
+      BAO_ADDR: ${{ vars.BAO_ADDR }}
+      BAO_ROLE: ${{ vars.BAO_ROLE }}
+      BAO_SECRET_PATH: ${{ vars.BAO_SECRET_PATH }}
+      BAO_AUDIENCE: ${{ vars.BAO_AUDIENCE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch secrets from OpenBao (optional)
+        if: env.BAO_ADDR != ''
+        run: |
+          BAO_JWT="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$BAO_AUDIENCE" \
+            | python3 -c 'import sys, json; print(json.load(sys.stdin)["value"])')"
+          export BAO_JWT
+          sh addons/openbao/fetch-secrets.sh
+      - name: Start OTel Collector sidecar (Podman, shares host network)
+        run: |
+          [ -f bao.env ] && . ./bao.env || true
+          podman run -d --name otel-collector --network host \
+            -e ELASTIC_OTLP_ENDPOINT -e ELASTIC_OTLP_AUTHORIZATION \
+            -v "$PWD/otel/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro,Z" \
+            docker.io/otel/opentelemetry-collector-contrib:latest \
+            --config /etc/otelcol/config.yaml
+      - name: Apply fix, push branch, open PR
+        run: |
+          [ -f bao.env ] && . ./bao.env || true
+          claude -p "You are the AGENT personality (read-write). Task: $CLAUDE_TASK. \
+          Work per CLAUDE.MD, build with 'podman build -t app-test -f Containerfile .', \
+          and make atomic, conventional-commit-style changes." \
+            --model "$CLAUDE_MODEL" \
+            --permission-mode bypassPermissions \
+            --dangerously-skip-permissions \
+            --output-format json > claude-result.json
+          git config user.email "claude-agent@ci.local"
+          git config user.name "Claude CI Agent"
+          BRANCH="claude/task-${GITHUB_RUN_ID}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git diff --cached --quiet || git commit -m "feat: automated change by Claude agent"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
+          jq -n --arg t "Claude agent: ${CLAUDE_TASK}" --arg h "$BRANCH" --arg b "${BASE_BRANCH:-main}" \
+            '{title: $t, head: $h, base: $b, body: "Automated change opened by the Claude CI agent."}' | \
+            curl -sS -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls" -d @-
+      - name: Push run cost to OTel (best-effort)
+        if: always()
+        run: python3 otel/emit_cost.py claude-result.json || true
+      - name: Flush + stop OTel Collector
+        if: always()
+        run: |
+          # Wait for the collector's batch processor (5s timeout) and the metric
+          # export interval (5s) to push the last datapoints to Elastic before
+          # we tear the sidecar down — otherwise the final export is cut off.
+          sleep 10
+          podman logs otel-collector || true
+          podman stop otel-collector || true

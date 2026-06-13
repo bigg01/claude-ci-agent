@@ -1,0 +1,58 @@
+# GitHub Action — the reusable analog of the GitLab `claude-agent` component
+# (templates/claude-agent.yml). A Docker container action that runs the agent
+# inside the rootless sandbox image. Other repos consume it with `uses:`:
+#
+#   - uses: bigg01/claude-ci-agent@v1
+#     with:
+#       prompt: "Fix the failing unit tests and commit the change."
+#       anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+#
+# Bypass-permissions ("YOLO") mode is the default and is safe because the agent
+# runs fully contained in the sandbox image — see docs/yolo-mode.md.
+name: "Claude CI Agent"
+description: "Run the Claude CI agent inside the rootless, OTel-instrumented sandbox image."
+author: "claude-ci-agent"
+branding:
+  icon: "cpu"
+  color: "orange"
+
+inputs:
+  prompt:
+    description: "The task prompt handed to the agent."
+    required: true
+  anthropic_api_key:
+    description: "Anthropic API key. Pass via a secret, e.g. ${{ secrets.ANTHROPIC_API_KEY }}."
+    required: true
+  claude_args:
+    description: "Extra flags for the `claude` CLI. Set to an empty string to require approvals."
+    required: false
+    default: "--dangerously-skip-permissions"
+  model:
+    description: "Claude model id."
+    required: false
+    default: "claude-sonnet-4-6"
+  otel_endpoint:
+    description: "OTLP endpoint of the OTel Collector sidecar."
+    required: false
+    default: "http://localhost:4318"
+
+runs:
+  using: "docker"
+  # Published by the build-image job in .github/workflows/claude-agent.yml.
+  image: "docker://ghcr.io/bigg01/claude-ci-agent/claude-agent:latest"
+  env:
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+    CLAUDE_MODEL: ${{ inputs.model }}
+    CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+    OTEL_LOG_TOOL_CONTENT: "1"
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otel_endpoint }}
+  entrypoint: "/bin/bash"
+  args:
+    - "-c"
+    - >-
+      if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+        echo "::error::anthropic_api_key is empty. Pass it from a repo/org secret." >&2;
+        exit 1;
+      fi;
+      claude --version;
+      claude ${{ inputs.claude_args }} --model "$CLAUDE_MODEL" -p "${{ inputs.prompt }}"

@@ -1,0 +1,90 @@
+# ===========================================================================
+# OPTIONAL ADDON — a PER-TEAM OTel Collector (single-tenant).
+#
+# Each DevOps/SRE team deploys its OWN collector with its OWN OTEL_TEAM. The
+# collector forces every record into that team's index, so a mistagged run can
+# never leak into another team's data — tenant isolation is by deployment, not
+# by trust. Pair it with an Elasticsearch role scoped to claude-agent-<team>-*
+# (see README.md) for end-to-end per-team separation.
+#
+# Index ownership is decided HERE, in the exporter — not by the dashboard and
+# not by the OTLP receiver. Point each team's agents at their own collector via
+# OTEL_EXPORTER_OTLP_ENDPOINT.
+#
+# Required env:
+#   OTEL_TEAM     the team slug, e.g. "sre-payments"  → claude-agent-sre-payments-*
+#   ES_ENDPOINT   Elasticsearch URL (default http://elasticsearch:9200)
+# ===========================================================================
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 2s
+
+  # Stamp the owning team on every record (for filtering/RBAC), regardless of
+  # what the run claimed — this collector belongs to one team.
+  transform/team:
+    error_mode: ignore
+    log_statements: &stamp
+      - context: resource
+        statements:
+          - set(attributes["team.name"], "${env:OTEL_TEAM}")
+    trace_statements: *stamp
+    metric_statements: *stamp
+
+  # Credential scrubbing — redact before anything is stored.
+  transform/scrub:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "(?i)(api[_-]?key|token|secret|password|bearer)\\s*[=:]\\s*\\S+", "$$1=***REDACTED***")
+          - replace_pattern(body, "sk-ant-[A-Za-z0-9_-]+", "***REDACTED_ANTHROPIC_KEY***")
+          - replace_pattern(body, "gh[pousr]_[A-Za-z0-9]+", "***REDACTED_GITHUB_TOKEN***")
+
+  attributes/scrub:
+    actions:
+      - key: anthropic.api_key
+        action: delete
+      - key: authorization
+        action: delete
+      - key: env.ANTHROPIC_API_KEY
+        action: delete
+      - key: env.GITHUB_TOKEN
+        action: delete
+
+exporters:
+  # The team slug is baked into the index names at config load (${env:OTEL_TEAM}),
+  # so this collector only ever writes to its own team's indices.
+  elasticsearch:
+    endpoints: ["${env:ES_ENDPOINT:-http://elasticsearch:9200}"]
+    logs_index: "claude-agent-${env:OTEL_TEAM}-logs"
+    traces_index: "claude-agent-${env:OTEL_TEAM}-traces"
+    metrics_index: "claude-agent-${env:OTEL_TEAM}-metrics"
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [transform/team, transform/scrub, attributes/scrub, batch]
+      exporters: [elasticsearch, debug]
+    traces:
+      receivers: [otlp]
+      processors: [transform/team, attributes/scrub, batch]
+      exporters: [elasticsearch]
+    metrics:
+      receivers: [otlp]
+      processors: [transform/team, attributes/scrub, batch]
+      exporters: [elasticsearch]
+  telemetry:
+    logs:
+      level: warn

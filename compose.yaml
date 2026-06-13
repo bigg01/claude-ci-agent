@@ -1,0 +1,80 @@
+# Local stack for the Claude CI agent — Podman Compose (also works with docker compose).
+#
+#   make stack-up        # Elasticsearch + Kibana + OTel Collector
+#   make ci-local        # bring up the stack and run the telemetry e2e test
+#   make stack-down      # tear everything down
+#
+# The agent service is behind the "agent" profile so it only runs when asked
+# (it needs ANTHROPIC_API_KEY). Start it with:
+#   podman-compose --profile agent up agent
+#
+# Use `podman-compose` (the hyphenated Python tool), NOT `podman compose` (the
+# space form). The latter delegates to an old docker-compose that rejects the
+# Compose-spec `name:` key below.
+#
+# Note: Elasticsearch needs vm.max_map_count >= 262144 on the host:
+#   sudo sysctl -w vm.max_map_count=262144
+name: claude-ci-agent-local
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"      # local only — never in prod
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  otel-collector:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.110.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel/collector-config.local.yaml:/etc/otel/config.yaml:ro,Z
+    ports:
+      - "4317:4317"   # OTLP/gRPC
+      - "4318:4318"   # OTLP/HTTP
+    depends_on:
+      - elasticsearch
+
+  # Optional — the agent itself. Needs ANTHROPIC_API_KEY in the environment.
+  agent:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: app-test
+    profiles: ["agent"]
+    environment:
+      CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+      OTEL_LOG_TOOL_CONTENT: "1"
+      # Full exporter wiring so a live run actually ships logs + metrics to the
+      # collector (→ Elasticsearch → the Kibana dashboard).
+      OTEL_METRICS_EXPORTER: "otlp"
+      OTEL_LOGS_EXPORTER: "otlp"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      # Short CI jobs exit before the 60s default flush — shorten it.
+      OTEL_METRIC_EXPORT_INTERVAL: "5000"
+      CLAUDE_PERSONALITY: "agent"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    command:
+      - claude
+      - --dangerously-skip-permissions
+      - -p
+      - "Reply with exactly: E2E_OK"
+    depends_on:
+      - otel-collector

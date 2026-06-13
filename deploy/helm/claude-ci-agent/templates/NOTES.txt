@@ -1,0 +1,16 @@
+claude-ci-agent installed as "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Platform   : {{ .Values.platform }}
+Team       : {{ .Values.team }}  (telemetry → claude-agent-{{ .Values.team }}-*)
+{{- if .Values.collector.enabled }}
+Collector  : {{ include "claude.collectorName" . }} (OTLP {{ ternary "https" "http" .Values.certManager.enabled }} on :{{ .Values.collector.service.otlpHttpPort }})
+Agent OTLP : {{ include "claude.otelEndpoint" . }}
+{{- end }}
+Secrets    : {{ if .Values.openbao.enabled }}OpenBao injector (role {{ .Values.openbao.role }}, path {{ .Values.openbao.secretPath }}){{ else if .Values.secrets.existingSecret }}existingSecret/{{ .Values.secrets.existingSecret }}{{ else }}NONE — set openbao.enabled or secrets.existingSecret{{ end }}
+TLS        : {{ if .Values.certManager.enabled }}cert-manager ({{ .Values.certManager.issuerRef.kind }}/{{ .Values.certManager.issuerRef.name }}){{ else }}disabled (plaintext OTLP in-cluster){{ end }}
+
+{{- if and (not .Values.openbao.enabled) (not .Values.secrets.existingSecret) }}
+
+WARNING: no secret source configured — the agent has no ANTHROPIC_API_KEY.
+         Set `secrets.existingSecret` or `openbao.enabled=true`.
+{{- end }}

@@ -1,0 +1,99 @@
+# ===========================================================================
+# OPTIONAL ADDON — per-team telemetry routing.
+#
+# Routes each CI run's logs/traces/metrics to a DevOps/SRE team's OWN
+# Elasticsearch data stream, driven by the `team.name` resource attribute the
+# run carries (set via OTEL_TEAM → OTEL_RESOURCE_ATTRIBUTES). One config serves
+# every team — adding a team needs NO collector change, just a new OTEL_TEAM
+# value on that pipeline.
+#
+# Correction to the common misconception: the *dashboard* and the OTLP
+# *receiver* do not choose the index. The receiver ingests everything; the
+# dashboard only reads. Ownership is decided here, in the exporter, from the
+# routing key the run stamps on itself. Per-team RBAC + Kibana data views are
+# downstream consumers of these data streams (see README.md).
+#
+# Result, per team `<t>`:  logs-claude.agent-<t>
+#                          traces-claude.agent-<t>
+#                          metrics-claude.agent-<t>
+# Untagged runs fall back to the `default` namespace.
+# ===========================================================================
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 2s
+
+  # Derive the data-stream namespace from the team the run declared. Teams set
+  # only `team.name` (via OTEL_TEAM); this maps it to the data_stream.* fields
+  # the Elasticsearch exporter routes on, and defaults anything untagged.
+  transform/team:
+    error_mode: ignore
+    log_statements: &team_routing
+      - context: resource
+        statements:
+          - set(attributes["data_stream.dataset"], "claude.agent") where attributes["data_stream.dataset"] == nil
+          - set(attributes["data_stream.namespace"], attributes["team.name"]) where attributes["team.name"] != nil
+          - set(attributes["data_stream.namespace"], "default") where attributes["data_stream.namespace"] == nil
+    trace_statements: *team_routing
+    metric_statements: *team_routing
+
+  # Same credential scrubbing as the base collector — redact before storage.
+  transform/scrub:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "(?i)(api[_-]?key|token|secret|password|bearer)\\s*[=:]\\s*\\S+", "$$1=***REDACTED***")
+          - replace_pattern(body, "sk-ant-[A-Za-z0-9_-]+", "***REDACTED_ANTHROPIC_KEY***")
+          - replace_pattern(body, "gh[pousr]_[A-Za-z0-9]+", "***REDACTED_GITHUB_TOKEN***")
+
+  attributes/scrub:
+    actions:
+      - key: anthropic.api_key
+        action: delete
+      - key: authorization
+        action: delete
+      - key: env.ANTHROPIC_API_KEY
+        action: delete
+      - key: env.GITHUB_TOKEN
+        action: delete
+
+exporters:
+  # One exporter, many data streams. Dynamic indexing builds the stream name
+  # from data_stream.{type,dataset,namespace} on each record.
+  elasticsearch:
+    endpoints: ["${env:ES_ENDPOINT:-http://elasticsearch:9200}"]
+    logs_dynamic_index:
+      enabled: true
+    traces_dynamic_index:
+      enabled: true
+    metrics_dynamic_index:
+      enabled: true
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [transform/team, transform/scrub, attributes/scrub, batch]
+      exporters: [elasticsearch, debug]
+    traces:
+      receivers: [otlp]
+      processors: [transform/team, attributes/scrub, batch]
+      exporters: [elasticsearch]
+    metrics:
+      receivers: [otlp]
+      processors: [transform/team, attributes/scrub, batch]
+      exporters: [elasticsearch]
+  telemetry:
+    logs:
+      level: warn

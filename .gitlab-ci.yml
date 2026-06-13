@@ -1,0 +1,37 @@
+# GitLab CI — component release ONLY.
+#
+# This GitLab project is a READ-ONLY MIRROR of the GitHub repository
+# (github.com/bigg01/claude-ci-agent). All development and CI for the project
+# itself — tests, image build, the advisor/agent personalities — run on GitHub
+# Actions (see .github/workflows/). GitLab does not need that pipeline.
+#
+# The one thing GitLab is for: publishing the reusable CI/CD component in
+# templates/claude-agent.yml to the GitLab CI/CD Catalog so other GitLab projects
+# can `include: component:` it. This pipeline therefore does exactly ONE thing —
+# on a semver tag (vX.Y.Z), create a release that publishes the component.
+#
+# Nothing runs on branch pushes, merge requests, or ordinary mirror syncs — only
+# tags match a rule, so no pipeline is even created otherwise.
+#
+# Prerequisites (one-time, in the GitLab project):
+#   * Settings → General → Visibility → enable "CI/CD Catalog project".
+#   * Settings → Repository → Mirroring → enable "Run pipelines for mirror
+#     updates" (so tag syncs from GitHub trigger this release pipeline).
+#   * A README.md describing the component (already present at repo root).
+# Reference: https://docs.gitlab.com/ee/ci/components/#publish-a-new-release
+
+stages:
+  - release
+
+create-component-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    # Only on semantic-version tags — the catalog requires semver releases.
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - echo "Publishing the claude-agent component $CI_COMMIT_TAG to the CI/CD Catalog."
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "Release $CI_COMMIT_TAG"
+    description: "Claude CI agent — reusable GitLab CI/CD component release $CI_COMMIT_TAG."

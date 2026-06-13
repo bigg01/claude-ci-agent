@@ -1,0 +1,78 @@
+# GitLab CI/CD component: claude-agent
+#
+# Runs the Claude CI agent inside the rootless Podman sandbox image, with OTel
+# telemetry enabled. Defaults to bypass-permissions ("YOLO") mode, which is safe
+# here because the agent runs fully contained — see docs/yolo-mode.md.
+#
+# Usage:
+#   include:
+#     - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@<version>
+#       inputs:
+#         prompt: "Fix the failing unit tests and commit the change."
+#
+# Before this component will run, the consuming team MUST provide their Anthropic
+# API key as a *masked, protected* CI/CD variable (Settings → CI/CD → Variables,
+# or at the group level to share one key across the whole team). The key is taken
+# by VARIABLE NAME — never as a component input — because component inputs are
+# interpolated as plaintext into the compiled pipeline and would leak the secret.
+#
+# HINT — prefer a short-lived, rotated key here, scoped to a dedicated Anthropic
+# workspace with a spend limit (or minted on demand via the OpenBao addon / OIDC
+# federation rather than stored). The API key is the one leaked credential that
+# bills straight to your account, and a CI variable is exposed to every job, log,
+# and cache — short-lived + workspace-scoped + spend-capped shrinks both the
+# window it stays valid and the blast radius if it leaks.
+#
+# Reference: https://docs.gitlab.com/ee/ci/components/
+spec:
+  inputs:
+    stage:
+      default: test
+      description: Pipeline stage the job runs in.
+    image:
+      default: app-test
+      description: Container image providing the Claude Code CLI (the sandbox image).
+    prompt:
+      description: The task prompt handed to the agent.
+    api_key_variable:
+      default: "ANTHROPIC_API_KEY"
+      description: >-
+        Name of the masked, protected CI/CD variable that holds your team's
+        Anthropic API key. Create it under Settings → CI/CD → Variables (or at
+        the group level to share it across the team), then set this to its name
+        if it differs from the default. Pass the variable NAME here, not the key
+        itself. The job fails fast with instructions if the variable is unset.
+    claude_args:
+      default: "--dangerously-skip-permissions"
+      description: >-
+        Extra flags passed to the `claude` CLI. Defaults to bypass-permissions
+        mode; set to an empty string to require approvals.
+    otel_endpoint:
+      default: "http://localhost:4318"
+      description: OTLP endpoint of the OTel Collector sidecar.
+---
+"claude-agent":
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  variables:
+    CLAUDE_CODE_ENABLE_TELEMETRY: "1"
+    OTEL_LOG_TOOL_CONTENT: "1"
+    OTEL_EXPORTER_OTLP_ENDPOINT: $[[ inputs.otel_endpoint ]]
+  before_script:
+    # Resolve the team's Anthropic key from the named CI/CD variable (indirect,
+    # so a custom/group-level variable name works too) and fail fast with
+    # instructions if the team has not provided it.
+    - |
+      KEY_VAR="$[[ inputs.api_key_variable ]]"
+      eval "KEY_VALUE=\${$KEY_VAR:-}"
+      if [ -z "$KEY_VALUE" ]; then
+        echo "ERROR: required secret \$$KEY_VAR is not set." >&2
+        echo "Add your team's Anthropic API key as a masked, protected CI/CD" >&2
+        echo "variable named '$KEY_VAR' (Settings → CI/CD → Variables, or at the" >&2
+        echo "group level to share it across the team), then re-run the pipeline." >&2
+        exit 1
+      fi
+      export ANTHROPIC_API_KEY="$KEY_VALUE"
+  script:
+    - claude --version
+    - claude $[[ inputs.claude_args ]] -p "$[[ inputs.prompt ]]"

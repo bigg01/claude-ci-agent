@@ -1,0 +1,126 @@
+# Claude CI agent — Kubernetes Job, portable across AKS and OpenShift.
+#
+# Hardened to satisfy the Kubernetes "restricted" Pod Security Standard (AKS) and
+# OpenShift's restricted-v2 SCC at the same time. Apply alongside networkpolicy.yaml.
+#
+#   kubectl apply -f deploy/networkpolicy.yaml
+#   kubectl apply -f deploy/agent-job.yaml
+#
+# Notes:
+#   - image: replace with your registry path for the sandbox image (app-test).
+#   - AKS: runAsUser 1001 is used as-is (matches the Containerfile's USER).
+#   - OpenShift: REMOVE the runAsUser/runAsGroup lines below — the restricted-v2
+#     SCC injects an allocated UID automatically; the group-writable image paths
+#     keep it working. Keeping a hardcoded UID outside the namespace range is
+#     rejected by the SCC.
+# Dedicated identity for this agent — its own GitLab service account (bot user)
+# owns the push token in claude-agent-secrets, so commits/MRs/audit attribute to
+# `claude-agent`, never a human or a shared token. One per (personality × team):
+# e.g. claude-agent-payments. See docs/ci-versions.md "Identity & attribution".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: claude-agent
+  labels:
+    app.kubernetes.io/name: claude-ci-agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Per-run attribution: use `generateName: claude-agent-` with `kubectl create`
+  # (instead of `name:` + `kubectl apply`) to get a unique Job per run, e.g.
+  # claude-agent-7fkqd — so each execution is distinct in `kubectl get jobs`.
+  name: claude-agent
+  labels:
+    app.kubernetes.io/name: claude-ci-agent
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300        # ephemeral: clean up after the run
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: claude-ci-agent
+    spec:
+      restartPolicy: Never
+      serviceAccountName: claude-agent   # the agent's own identity (see top of file)
+      automountServiceAccountToken: false
+      securityContext:                 # pod-level
+        runAsNonRoot: true
+        runAsUser: 1001                # OpenShift: delete this line
+        runAsGroup: 0                  # OpenShift: delete this line
+        fsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: app-test              # replace with <registry>/claude-ci-agent:<tag>
+          args:
+            - claude
+            - --dangerously-skip-permissions
+            - -p
+            - "Fix the failing unit tests and commit the change."
+          env:
+            - name: CLAUDE_CODE_ENABLE_TELEMETRY
+              value: "1"
+            - name: OTEL_LOG_TOOL_CONTENT
+              value: "1"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://localhost:4318"   # OTel Collector sidecar
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: claude-agent-secrets
+                  key: anthropic-api-key
+            # Unique, attributable GitLab access. The token belongs to the
+            # `claude-agent` service account (bot user); git honors the
+            # GIT_AUTHOR_*/GIT_COMMITTER_* env vars natively, so commits carry
+            # this identity with no `git config` needed. Match the name/email to
+            # the bot, and override per team (claude-agent-payments, etc.).
+            - name: GIT_PUSH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: claude-agent-secrets
+                  key: gitlab-push-token
+            - name: GIT_AUTHOR_NAME
+              value: "Claude Agent"
+            - name: GIT_AUTHOR_EMAIL
+              value: "claude-agent@noreply.gitlab.example.com"
+            - name: GIT_COMMITTER_NAME
+              value: "Claude Agent"
+            - name: GIT_COMMITTER_EMAIL
+              value: "claude-agent@noreply.gitlab.example.com"
+          securityContext:             # container-level
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: home
+              mountPath: /opt/agent-home
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+
+        # OTel Collector sidecar — scrubs secrets and exports OTLP to Elastic.
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 4318      # OTLP/HTTP
+
+      volumes:
+        # readOnlyRootFilesystem is on, so writable paths are explicit emptyDir.
+        - name: workspace
+          emptyDir: {}
+        - name: home
+          emptyDir: {}

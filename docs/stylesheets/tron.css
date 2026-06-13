@@ -1,0 +1,195 @@
+/* ===========================================================================
+   Tron / futuristic theme for the Claude CI Agent docs.
+   Neon-on-black grid, cyan primary with an orange "program" accent, glow.
+   Tuned for the slate (dark) scheme — the site default — with a lighter
+   variant for the default scheme.
+   =========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap");
+
+:root {
+  --tron-cyan: #25e8ff;
+  --tron-cyan-dim: #0fb6cc;
+  --tron-orange: #ff9d2e;
+  --tron-grid: rgba(37, 232, 255, 0.06);
+  --tron-glow: 0 0 6px rgba(37, 232, 255, 0.55), 0 0 18px rgba(37, 232, 255, 0.25);
+}
+
+/* ----- Color tokens: dark (slate) scheme ---------------------------------- */
+[data-md-color-scheme="slate"] {
+  --md-hue: 205;
+
+  --md-default-bg-color: #03060b;
+  --md-default-fg-color: #cdeef5;
+  --md-default-fg-color--light: #9fc7d2;
+  --md-default-fg-color--lighter: #5d8f9c;
+
+  --md-primary-fg-color: #061018;
+  --md-primary-bg-color: var(--tron-cyan);
+  --md-accent-fg-color: var(--tron-orange);
+
+  --md-typeset-color: #cdeef5;
+  --md-typeset-a-color: var(--tron-cyan);
+
+  --md-code-bg-color: #050c14;
+  --md-code-fg-color: #b9f4ff;
+
+  --md-footer-bg-color: #02040a;
+  --md-footer-bg-color--dark: #02040a;
+}
+
+/* ----- Color tokens: light (default) scheme — "clean grid" ---------------- */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #06222b;
+  --md-primary-bg-color: #e6fbff;
+  --md-accent-fg-color: var(--tron-cyan-dim);
+  --md-typeset-a-color: var(--tron-cyan-dim);
+  --tron-grid: rgba(15, 182, 204, 0.08);
+}
+
+/* ----- The grid floor ----------------------------------------------------- */
+.md-main {
+  background-color: var(--md-default-bg-color);
+  background-image:
+    linear-gradient(var(--tron-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tron-grid) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: center top;
+}
+
+/* ----- Header / nav bar: glowing rule under it ---------------------------- */
+.md-header {
+  background-color: rgba(3, 8, 14, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--tron-cyan-dim);
+  box-shadow: 0 0 14px rgba(37, 232, 255, 0.35);
+}
+.md-tabs {
+  background-color: transparent;
+  border-bottom: 1px solid rgba(37, 232, 255, 0.18);
+}
+
+/* ----- Headings: Orbitron, uppercase, faint glow -------------------------- */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-family: "Orbitron", var(--md-text-font-family, sans-serif);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.md-typeset h1 {
+  color: var(--tron-cyan);
+  text-shadow: var(--tron-glow);
+}
+.md-typeset h2 {
+  color: #e7feff;
+  border-bottom: 1px solid rgba(37, 232, 255, 0.25);
+  padding-bottom: 0.2em;
+}
+.md-typeset h2::before {
+  content: "▸ ";
+  color: var(--tron-orange);
+}
+
+/* ----- Links: neon underline on hover ------------------------------------- */
+.md-typeset a {
+  text-decoration: none;
+  transition: text-shadow 120ms ease, color 120ms ease;
+}
+.md-typeset a:hover {
+  color: #9af6ff;
+  text-shadow: var(--tron-glow);
+}
+
+/* ----- Code: dark slab with cyan edge + glow ------------------------------ */
+.md-typeset pre > code,
+.md-typeset .highlight pre {
+  border: 1px solid rgba(37, 232, 255, 0.35);
+  border-radius: 4px;
+  box-shadow: inset 0 0 18px rgba(37, 232, 255, 0.08),
+    0 0 10px rgba(37, 232, 255, 0.12);
+}
+.md-typeset code {
+  border: 1px solid rgba(37, 232, 255, 0.22);
+}
+
+/* ----- Tables: grid-deck styling ------------------------------------------ */
+.md-typeset table:not([class]) {
+  border: 1px solid rgba(37, 232, 255, 0.3);
+  box-shadow: 0 0 12px rgba(37, 232, 255, 0.12);
+}
+.md-typeset table:not([class]) th {
+  background: linear-gradient(180deg, #07202a, #04141b);
+  color: var(--tron-cyan);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--tron-cyan-dim);
+}
+.md-typeset table:not([class]) tr:hover {
+  background: rgba(37, 232, 255, 0.05);
+}
+
+/* ----- Admonitions: glowing identity bar ---------------------------------- */
+.md-typeset .admonition,
+.md-typeset details {
+  background: rgba(5, 14, 22, 0.7);
+  border: 1px solid rgba(37, 232, 255, 0.28);
+  border-left-width: 3px;
+  border-radius: 4px;
+  box-shadow: 0 0 14px rgba(37, 232, 255, 0.1);
+}
+.md-typeset .admonition.note,
+.md-typeset .admonition.info {
+  border-left-color: var(--tron-cyan);
+}
+.md-typeset .admonition.warning,
+.md-typeset .admonition.danger {
+  border-left-color: var(--tron-orange);
+}
+
+/* ----- Buttons / search / nav active state -------------------------------- */
+.md-search__input {
+  background-color: rgba(37, 232, 255, 0.06);
+  border: 1px solid rgba(37, 232, 255, 0.25);
+}
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active {
+  color: var(--tron-cyan);
+  text-shadow: var(--tron-glow);
+}
+
+/* ----- Footer ------------------------------------------------------------- */
+.md-footer-meta {
+  border-top: 1px solid rgba(37, 232, 255, 0.2);
+}
+
+/* ----- Scrollbar (WebKit) ------------------------------------------------- */
+[data-md-color-scheme="slate"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-track {
+  background: #03060b;
+}
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-thumb {
+  background: var(--tron-cyan-dim);
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(37, 232, 255, 0.4);
+}
+
+/* Respect reduced-motion: nothing animates, but keep transitions cheap. */
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset a {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Full-width layout: the theme caps content at ~61rem. Let header, content,
+ * and footer use the entire viewport width (they all share the .md-grid cap).
+ * ------------------------------------------------------------------------- */
+.md-grid {
+  max-width: 100%;
+}

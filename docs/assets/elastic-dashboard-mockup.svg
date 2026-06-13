@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" font-family="Inter,'Segoe UI',system-ui,sans-serif" role="img" aria-label="Stylized mockup of a Kibana dashboard for the Claude CI Agent. Demo only, not real data.">
+  <defs>
+    <filter id="panelShadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#1a1c21" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- page background -->
+  <rect x="0" y="0" width="1000" height="660" fill="#f5f7fa"/>
+
+  <!-- ============ left nav (Kibana dark) ============ -->
+  <rect x="0" y="0" width="52" height="660" fill="#1d1e24"/>
+  <!-- Elastic logo mark (stylized cluster) -->
+  <g transform="translate(14,14)">
+    <rect x="0"  y="0"  width="10" height="22" rx="5" fill="#00bfb3"/>
+    <rect x="7"  y="2"  width="10" height="20" rx="5" fill="#0b64dd" opacity="0.92"/>
+    <rect x="14" y="6"  width="9"  height="9"  rx="4.5" fill="#fec514"/>
+    <rect x="14" y="0"  width="9"  height="6"  rx="3" fill="#f990c0"/>
+  </g>
+  <!-- nav icons -->
+  <g fill="#535966">
+    <rect x="14" y="70"  width="24" height="20" rx="4"/>
+    <rect x="14" y="104" width="24" height="20" rx="4" fill="#ffffff" opacity="0.9"/>
+    <rect x="14" y="138" width="24" height="20" rx="4"/>
+    <rect x="14" y="172" width="24" height="20" rx="4"/>
+    <rect x="14" y="206" width="24" height="20" rx="4"/>
+  </g>
+  <!-- active nav indicator -->
+  <rect x="0" y="104" width="3" height="20" fill="#00bfb3"/>
+
+  <!-- ============ top header bar ============ -->
+  <rect x="52" y="0" width="948" height="48" fill="#ffffff"/>
+  <line x1="52" y1="48" x2="1000" y2="48" stroke="#d3dae6" stroke-width="1"/>
+  <!-- breadcrumb -->
+  <text x="72" y="29" font-size="13" fill="#69707d">Analytics  ›  Dashboard  ›  <tspan fill="#1a1c21" font-weight="600">Claude CI Agent · Observability</tspan></text>
+  <!-- DEMO badge -->
+  <g>
+    <rect x="690" y="13" width="150" height="22" rx="11" fill="#fdd8d8" stroke="#bd271e" stroke-width="1"/>
+    <circle cx="704" cy="24" r="4" fill="#bd271e"/>
+    <text x="714" y="28" font-size="11" font-weight="700" fill="#a01b14">DEMO — NOT REAL DATA</text>
+  </g>
+  <!-- time picker -->
+  <rect x="850" y="11" width="132" height="26" rx="4" fill="#ffffff" stroke="#d3dae6"/>
+  <text x="864" y="28" font-size="12" fill="#343741">🕒 Last 24 hours</text>
+
+  <!-- ============ query / filter bar ============ -->
+  <rect x="64" y="60" width="800" height="30" rx="5" fill="#ffffff" stroke="#d3dae6"/>
+  <text x="78" y="80" font-size="12" fill="#69707d">🔍  service.name : "claude-agent"</text>
+  <rect x="872" y="60" width="110" height="30" rx="5" fill="#ffffff" stroke="#0077cc"/>
+  <text x="888" y="80" font-size="12" fill="#0077cc" font-weight="600">⟳ Refresh</text>
+  <!-- filter pills -->
+  <g font-size="11">
+    <rect x="64" y="98" width="124" height="20" rx="10" fill="#e6f1f7" stroke="#abc8da"/>
+    <text x="74" y="112" fill="#0a5e8c">env: sandbox  ✕</text>
+    <rect x="196" y="98" width="150" height="20" rx="10" fill="#e6f1f7" stroke="#abc8da"/>
+    <text x="206" y="112" fill="#0a5e8c">ci.flavor: gitlab,github  ✕</text>
+    <rect x="354" y="98" width="86" height="20" rx="10" fill="#ffffff" stroke="#d3dae6" stroke-dasharray="3 2"/>
+    <text x="364" y="112" fill="#69707d">+ Add filter</text>
+  </g>
+
+  <!-- ============ KPI metric panels ============ -->
+  <g>
+    <g filter="url(#panelShadow)">
+      <rect x="64" y="132" width="174" height="80" rx="6" fill="#ffffff" stroke="#d3dae6"/>
+    </g>
+    <text x="78" y="160" font-size="11" fill="#69707d" letter-spacing="0.3">AGENT RUNS</text>
+    <text x="78" y="194" font-size="30" font-weight="700" fill="#1a1c21">123</text>
+
+    <g filter="url(#panelShadow)"><rect x="248" y="132" width="174" height="80" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+    <text x="262" y="160" font-size="11" fill="#69707d" letter-spacing="0.3">AVG TOKENS / RUN</text>
+    <text x="262" y="194" font-size="30" font-weight="700" fill="#0077cc">45.2k</text>
+
+    <g filter="url(#panelShadow)"><rect x="432" y="132" width="174" height="80" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+    <text x="446" y="160" font-size="11" fill="#69707d" letter-spacing="0.3">TOOL CALLS</text>
+    <text x="446" y="194" font-size="30" font-weight="700" fill="#1a1c21">1,204</text>
+
+    <g filter="url(#panelShadow)"><rect x="616" y="132" width="174" height="80" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+    <text x="630" y="160" font-size="11" fill="#69707d" letter-spacing="0.3">FAILED RUNS</text>
+    <text x="630" y="194" font-size="30" font-weight="700" fill="#bd271e">3</text>
+
+    <g filter="url(#panelShadow)"><rect x="800" y="132" width="182" height="80" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+    <text x="814" y="160" font-size="11" fill="#69707d" letter-spacing="0.3">SECRETS SCRUBBED</text>
+    <text x="814" y="194" font-size="30" font-weight="700" fill="#00857a">27</text>
+  </g>
+
+  <!-- ============ line chart: runs over time ============ -->
+  <g filter="url(#panelShadow)"><rect x="64" y="226" width="466" height="196" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+  <text x="80" y="250" font-size="13" font-weight="600" fill="#343741">Agent runs over time</text>
+  <text x="512" y="250" font-size="14" fill="#98a2b3" text-anchor="end">⋯</text>
+  <g stroke="#eef0f4">
+    <line x1="96" y1="280" x2="510" y2="280"/>
+    <line x1="96" y1="320" x2="510" y2="320"/>
+    <line x1="96" y1="360" x2="510" y2="360"/>
+  </g>
+  <line x1="96" y1="392" x2="510" y2="392" stroke="#d3dae6"/>
+  <!-- area + line in Elastic green -->
+  <polygon fill="#54b399" opacity="0.16"
+    points="100,372 140,350 180,360 220,318 260,332 300,290 340,308 380,270 420,300 460,256 500,284 500,392 100,392"/>
+  <polyline fill="none" stroke="#54b399" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"
+    points="100,372 140,350 180,360 220,318 260,332 300,290 340,308 380,270 420,300 460,256 500,284"/>
+  <text x="98" y="408" font-size="10" fill="#98a2b3">00:00</text>
+  <text x="476" y="408" font-size="10" fill="#98a2b3">23:59</text>
+
+  <!-- ============ bar chart: tool calls by type ============ -->
+  <g filter="url(#panelShadow)"><rect x="546" y="226" width="436" height="196" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+  <text x="562" y="250" font-size="13" font-weight="600" fill="#343741">Tool calls by type</text>
+  <text x="964" y="250" font-size="14" fill="#98a2b3" text-anchor="end">⋯</text>
+  <line x1="600" y1="392" x2="958" y2="392" stroke="#d3dae6"/>
+  <g>
+    <rect x="612" y="282" width="46" height="110" rx="2" fill="#6092c0"/>
+    <rect x="676" y="300" width="46" height="92"  rx="2" fill="#54b399"/>
+    <rect x="740" y="268" width="46" height="124" rx="2" fill="#d36086"/>
+    <rect x="804" y="330" width="46" height="62"  rx="2" fill="#9170b8"/>
+    <rect x="868" y="350" width="46" height="42"  rx="2" fill="#d6bf57"/>
+  </g>
+  <g font-size="11" fill="#69707d" text-anchor="middle">
+    <text x="635" y="408">Bash</text>
+    <text x="699" y="408">Edit</text>
+    <text x="763" y="408">Read</text>
+    <text x="827" y="408">Write</text>
+    <text x="891" y="408">Git</text>
+  </g>
+
+  <!-- ============ table: recent tool executions ============ -->
+  <g filter="url(#panelShadow)"><rect x="64" y="436" width="918" height="196" rx="6" fill="#ffffff" stroke="#d3dae6"/></g>
+  <text x="80" y="460" font-size="13" font-weight="600" fill="#343741">Recent tool executions (secret-scrubbed)</text>
+  <!-- header row -->
+  <rect x="65" y="470" width="916" height="26" fill="#f5f7fa"/>
+  <g font-size="11" font-weight="600" fill="#69707d" letter-spacing="0.3">
+    <text x="80" y="487">@TIMESTAMP</text>
+    <text x="180" y="487">RUN.ID</text>
+    <text x="280" y="487">CI</text>
+    <text x="360" y="487">TOOL</text>
+    <text x="450" y="487">COMMAND</text>
+    <text x="820" y="487">STATUS</text>
+    <text x="930" y="487">MS</text>
+  </g>
+  <g font-size="12" fill="#343741" font-family="'SFMono-Regular',Menlo,Consolas,monospace">
+    <text x="80" y="516">12:03:11.402</text><text x="180" y="516">r-8f3a…</text><text x="280" y="516">gitlab</text><text x="360" y="516">Bash</text><text x="450" y="516">podman build -t app-test .</text>
+    <circle cx="826" cy="512" r="4" fill="#00bfb3"/><text x="836" y="516" fill="#00857a">success</text><text x="930" y="516">8421</text>
+    <line x1="65" y1="526" x2="981" y2="526" stroke="#edf0f5"/>
+
+    <text x="80" y="544">12:03:55.118</text><text x="180" y="544">r-8f3a…</text><text x="280" y="544">gitlab</text><text x="360" y="544">Bash</text><text x="450" y="544">npm test  AUTH=&lt;REDACTED&gt;</text>
+    <circle cx="826" cy="540" r="4" fill="#00bfb3"/><text x="836" y="544" fill="#00857a">success</text><text x="930" y="544">1320</text>
+    <line x1="65" y1="554" x2="981" y2="554" stroke="#edf0f5"/>
+
+    <text x="80" y="572">12:07:02.660</text><text x="180" y="572">r-1c90…</text><text x="280" y="572">github</text><text x="360" y="572">Edit</text><text x="450" y="572">src/handler.ts  (+12 / −3)</text>
+    <circle cx="826" cy="568" r="4" fill="#00bfb3"/><text x="836" y="572" fill="#00857a">success</text><text x="930" y="572">47</text>
+    <line x1="65" y1="582" x2="981" y2="582" stroke="#edf0f5"/>
+
+    <text x="80" y="600">12:08:30.945</text><text x="180" y="600">r-1c90…</text><text x="280" y="600">github</text><text x="360" y="600">Bash</text><text x="450" y="600">npm run lint  token=&lt;REDACTED&gt;</text>
+    <circle cx="826" cy="596" r="4" fill="#bd271e"/><text x="836" y="600" fill="#a01b14">failed</text><text x="930" y="600">655</text>
+    <line x1="65" y1="610" x2="981" y2="610" stroke="#edf0f5"/>
+
+    <text x="80" y="628">12:09:14.201</text><text x="180" y="628">r-1c90…</text><text x="280" y="628">github</text><text x="360" y="628">Git</text><text x="450" y="628">commit -m "fix: lint errors"</text>
+    <circle cx="826" cy="624" r="4" fill="#00bfb3"/><text x="836" y="628" fill="#00857a">success</text><text x="930" y="628">120</text>
+  </g>
+
+  <!-- ============ faint watermark ============ -->
+  <g transform="rotate(-16 526 340)" opacity="0.07" pointer-events="none">
+    <text x="526" y="360" text-anchor="middle" font-size="120" font-weight="800" fill="#1a1c21">DEMO · NOT REAL</text>
+  </g>
+</svg>

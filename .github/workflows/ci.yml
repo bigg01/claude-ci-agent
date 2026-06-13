@@ -1,0 +1,32 @@
+# GitHub Actions — project CI (tests).
+#
+# GitHub is the source of truth for this repo (GitLab is a read-only mirror that
+# only publishes the component). This workflow runs the fast pytest suite — unit
+# tests for the OTLP cost emitter plus static validation of the configs and
+# manifests — on every push and pull request, gating the rest of the project.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync dependencies
+        run: uv sync --dev
+      - name: Run pytest
+        run: uv run pytest --junitxml=report.xml
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: report.xml

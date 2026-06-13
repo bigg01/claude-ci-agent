@@ -1,0 +1,32 @@
+{{- if and .Values.collector.enabled .Values.certManager.enabled -}}
+{{- if not .Values.certManager.issuerRef.name -}}
+{{- fail "certManager.enabled=true requires certManager.issuerRef.name" -}}
+{{- end -}}
+# Serving certificate for the collector's OTLP endpoint, issued by cert-manager.
+# The agent then exports OTLP over https to the in-cluster service DNS (a SAN below).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "claude.collectorName" . }}-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  secretName: {{ include "claude.collectorName" . }}-tls
+  duration: {{ .Values.certManager.duration }}
+  renewBefore: {{ .Values.certManager.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ .Values.certManager.issuerRef.name }}
+    kind: {{ .Values.certManager.issuerRef.kind }}
+    group: cert-manager.io
+  dnsNames:
+    - {{ include "claude.collectorName" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "claude.collectorName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    {{- with .Values.certManager.extraDnsNames }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

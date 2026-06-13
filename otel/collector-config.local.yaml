@@ -1,0 +1,66 @@
+# OTel Collector config for the LOCAL Podman Compose stack.
+#
+# Mirrors the secret-scrubbing of otel-collector-config.yaml, but exports straight
+# to the local single-node Elasticsearch (the production config targets Elastic
+# Cloud's managed OTLP intake, which isn't available locally). Kibana then reads
+# the claude-agent-* indices.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 2s
+
+  # Same credential scrubbing as production — redact before anything is stored.
+  transform/scrub:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "(?i)(api[_-]?key|token|secret|password|bearer)\\s*[=:]\\s*\\S+", "$$1=***REDACTED***")
+          - replace_pattern(body, "sk-ant-[A-Za-z0-9_-]+", "***REDACTED_ANTHROPIC_KEY***")
+          - replace_pattern(body, "gh[pousr]_[A-Za-z0-9]+", "***REDACTED_GITHUB_TOKEN***")
+
+  attributes/scrub:
+    actions:
+      - key: anthropic.api_key
+        action: delete
+      - key: authorization
+        action: delete
+      - key: env.ANTHROPIC_API_KEY
+        action: delete
+      - key: env.GITHUB_TOKEN
+        action: delete
+
+exporters:
+  elasticsearch:
+    endpoints: ["http://elasticsearch:9200"]
+    logs_index: "claude-agent-logs"
+    traces_index: "claude-agent-traces"
+    metrics_index: "claude-agent-metrics"
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [transform/scrub, attributes/scrub, batch]
+      exporters: [elasticsearch, debug]
+    traces:
+      receivers: [otlp]
+      processors: [attributes/scrub, batch]
+      exporters: [elasticsearch]
+    metrics:
+      receivers: [otlp]
+      processors: [attributes/scrub, batch]
+      exporters: [elasticsearch]
+  telemetry:
+    logs:
+      level: warn
