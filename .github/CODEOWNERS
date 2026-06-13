@@ -1,0 +1,13 @@
+# Code owners — automatically requested for review on matching paths.
+# https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything in the repo.
+*                       @bigg01
+
+# CI, release, and security-sensitive paths.
+/.github/               @bigg01
+/Containerfile          @bigg01
+/deploy/                @bigg01
+/templates/             @bigg01
+/action.yml             @bigg01
+/.gitlab-ci.yml         @bigg01

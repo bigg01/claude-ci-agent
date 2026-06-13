@@ -24,6 +24,12 @@ The agent runs in two CI flavors— **GitLab CI** and **GitHub Actions**— and
 detects which one it is in via `$GITLAB_CI` / `$GITHUB_ACTIONS`. The same rootless
 image deploys unchanged on **OpenShift** and **AKS** (see [`deploy/`](deploy/)).
 
+### 📖 [Read the full documentation →](https://bigg01.containerize.ch/claude-ci-agent/)
+
+This README is a summary; the complete docs (architecture, spec-driven development,
+CI setup, sandboxing, observability, Kubernetes/Helm, and more) live on the
+**[documentation site](https://bigg01.containerize.ch/claude-ci-agent/)**.
+
 Reusable across repos as a [GitLab component](templates/claude-agent.yml)
 (`include: component:`) and an equivalent [GitHub Action](action.yml)
 (`uses: bigg01/claude-ci-agent@v1`).

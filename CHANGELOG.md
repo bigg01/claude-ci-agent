@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
+to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+> ⚠️ Pre-1.0 alpha — anything may change between releases.
+
+## [Unreleased]
+
+## [0.1.0-alpha.2] — 2026-06-13
+
+### Added
+- CI quality gates in [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+  test coverage floor, markdown lint, secret scan (gitleaks), dependency
+  vulnerability scan (Trivy), and a non-blocking image scan that reports to the
+  Security tab.
+- "Setting the Anthropic API key" documentation for GitHub Actions secrets and
+  GitLab CI/CD variables.
+- Community health files: `CHANGELOG`, `CONTRIBUTING`, `CODE_OF_CONDUCT`,
+  `SUPPORT`, and `CODEOWNERS`.
+
+### Changed
+- Pinned the Helm chart, GitLab component, GitHub Action, and docs to
+  `0.1.0-alpha.2`.
+
+## [0.1.0-alpha.1] — 2026-06-13
+
+### Added
+- Rootless, unprivileged Podman sandbox agent image (`Containerfile`), portable
+  across OpenShift and AKS.
+- Reusable CI units: GitLab CI/CD component (`templates/`) and GitHub Action
+  (`action.yml`), plus event-driven workflows and `.gitlab-ci.yml`.
+- Helm chart (`deploy/helm/`) and raw manifests (`deploy/`), hardened for the
+  `restricted` Pod Security Standard / OpenShift SCC.
+- OpenTelemetry collector configs with secret scrubbing; per-run Anthropic cost
+  reporting (`otel/emit_cost.py`).
+- Local Podman Compose stack (Elasticsearch + Kibana + OTel Collector) and an
+  importable Kibana dashboard.
+- pytest suite, end-to-end and local-CI test scripts.
+- Zensical documentation site.
+
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.2...HEAD
+[0.1.0-alpha.2]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
+[0.1.0-alpha.1]: https://github.com/bigg01/claude-ci-agent/releases/tag/v0.1.0-alpha.1
