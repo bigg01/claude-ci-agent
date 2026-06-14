@@ -7,6 +7,7 @@ agent](https://github.com/bigg01/claude-ci-agent) spec-driven loop with a single
 ```
 .
 ├── .gitlab-ci.yml      # one include → both personalities
+├── CLAUDE.MD           # coding contract the agent and advisor both follow
 └── spec/
     └── feature01.md    # the contract the agent implements and the advisor grades
 ```

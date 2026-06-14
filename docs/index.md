@@ -12,7 +12,7 @@ An autonomous engineering teammate that executes inside a **rootless, unprivileg
 Podman sandbox**. Every action it takes is captured, scrubbed for secrets, and
 streamed to Elastic through an OpenTelemetry (OTel) Collector sidecar.
 
-## Start here— pick how you run it
+## Start here
 
 There are two ways to run the agent. Choose your path:
 

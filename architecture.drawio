@@ -1,111 +1,70 @@
-<mxfile host="app.diagrams.net" agent="claude-ci-agent" version="24.0.0">
-  <diagram id="ci-arch" name="CI Architecture">
-    <mxGraphModel dx="1100" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
-      <root>
-        <mxCell id="0" />
-        <mxCell id="1" parent="0" />
-
-        <!-- Title -->
-        <mxCell id="title" value="Multi-Agent / OTel CI Architecture" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#25e8ff;fontFamily=Orbitron;" vertex="1" parent="1">
-          <mxGeometry x="360" y="16" width="440" height="36" as="geometry" />
-        </mxCell>
-
-        <!-- GitLab CI -->
-        <mxCell id="gitlab" value="GitLab CI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="150" width="210" height="110" as="geometry" />
-        </mxCell>
-
-        <!-- GitHub Actions -->
-        <mxCell id="github" value="GitHub Actions&#10;&#10;.github/workflows/*.yml&#10;$GITHUB_ACTIONS == true&#10;Hosted / self-hosted runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="300" width="210" height="110" as="geometry" />
-        </mxCell>
-
-        <!-- ============ OUTER: Kubernetes Pod / CI job ============ -->
-        <mxCell id="pod" value="Kubernetes Pod  /  CI job   —   one network namespace ( localhost shared between containers )" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#03121a;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Orbitron;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
-          <mxGeometry x="290" y="92" width="660" height="404" as="geometry" />
-        </mxCell>
-
-        <!-- MIDDLE: the agent sandbox container -->
-        <mxCell id="sandbox" value="Container 1 — Rootless, unprivileged Podman sandbox  ·  claude-agent image" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#05101a;strokeColor=#25e8ff;fontColor=#25e8ff;fontFamily=Orbitron;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="310" y="140" width="420" height="336" as="geometry" />
-        </mxCell>
-
-        <!-- Claude CLI: runs in the sandbox container itself -->
-        <mxCell id="agent" value="Claude CLI — RUNS HERE&#10;&#10;plans · edits files · git commits · drives podman" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0a1c26;strokeColor=#25e8ff;fontColor=#e7feff;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="328" y="180" width="384" height="72" as="geometry" />
-        </mxCell>
-
-        <!-- OTel flags -->
-        <mxCell id="otelflags" value="CLAUDE_CODE_ENABLE_TELEMETRY=1 · OTEL_LOG_TOOL_CONTENT=1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="328" y="262" width="384" height="40" as="geometry" />
-        </mxCell>
-
-        <!-- INNER: nested child containers spawned by podman (rootless-in-rootless) -->
-        <mxCell id="nested" value="podman build / run   →   nested child containers  ( rootless-in-rootless )" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#160d03;strokeColor=#ff9d2e;fontColor=#ff9d2e;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=6;fontStyle=1;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
-          <mxGeometry x="328" y="314" width="384" height="150" as="geometry" />
-        </mxCell>
-
-        <mxCell id="childbuild" value="app-test&#10;&#10;podman build&#10;-f Containerfile" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ff9d2e;fontColor=#ffd9a8;fontFamily=Rajdhani;align=center;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="344" y="356" width="172" height="96" as="geometry" />
-        </mxCell>
-
-        <mxCell id="childrun" value="test / run container&#10;&#10;npm test · pytest&#10;app under test" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ff9d2e;fontColor=#ffd9a8;fontFamily=Rajdhani;align=center;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="526" y="356" width="172" height="96" as="geometry" />
-        </mxCell>
-
-        <!-- OTel Collector sidecar — Container 2 in the SAME pod -->
-        <mxCell id="otel" value="Container 2&#10;OTel Collector sidecar&#10;&#10;localhost:4318&#10;(secret scrub)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08161e;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="752" y="186" width="180" height="124" as="geometry" />
-        </mxCell>
-
-        <!-- Elastic — outside the pod -->
-        <mxCell id="elastic" value="Elastic&#10;&#10;claude-agent-&lt;team&gt;-*&#10;per-team index / RBAC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08161e;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="1000" y="200" width="150" height="110" as="geometry" />
-        </mxCell>
-
-        <!-- Edges -->
-        <mxCell id="e1" value="trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" edge="1" parent="1" source="gitlab" target="pod">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e2" value="trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" edge="1" parent="1" source="github" target="pod">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="enest" value="spawns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#ff9d2e;fontColor=#ffc785;fontFamily=Rajdhani;" edge="1" parent="1" source="agent" target="nested">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e3" value="OTLP events&#10;(via localhost)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" edge="1" parent="1" source="agent" target="otel">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e4" value="export" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" edge="1" parent="1" source="otel" target="elastic">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- LLM Gateway (optional) -->
-        <mxCell id="gateway" value="LLM Gateway (optional)&#10;&#10;Prompt caching · Guardrails · ANTHROPIC_BASE_URL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ff9d2e;fontColor=#ff9d2e;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="310" y="540" width="420" height="80" as="geometry" />
-        </mxCell>
-
-        <!-- Creation model (Agent personality) -->
-        <mxCell id="anthropic" value="Creation model&#10;&#10;Anthropic API&#10;claude-opus-4-8" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#e7feff;fontFamily=Rajdhani;align=center;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="310" y="672" width="200" height="78" as="geometry" />
-        </mxCell>
-
-        <!-- Review model (Advisor personality) — independent model or vendor -->
-        <mxCell id="reviewer" value="Review model / vendor&#10;&#10;independent — a different&#10;model or vendor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#160a1f;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;align=center;verticalAlign=middle;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="560" y="672" width="220" height="78" as="geometry" />
-        </mxCell>
-
-        <!-- Edges: agent -> gateway -> creation / review models -->
-        <mxCell id="e5" value="messages" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#ff9d2e;fontColor=#ffc785;fontFamily=Rajdhani;" edge="1" parent="1" source="agent" target="gateway">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e6" value="create (Agent)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" edge="1" parent="1" source="gateway" target="anthropic">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e7" value="review (Advisor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;" edge="1" parent="1" source="gateway" target="reviewer">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="ci-arch" name="CI Architecture">
+        <mxGraphModel dx="1269" dy="1061" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Multi-Agent / OTel CI Architecture" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#25e8ff;fontFamily=Orbitron;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="16" width="440" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="gitlab" value="GitLab CI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="150" width="210" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="github" value="GitHub Actions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="300" width="210" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="pod" value="Kubernetes Pod / CI job  ·  shared localhost" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#03121a;strokeColor=light-dark(#24ff50, #006a7e);fontColor=#9af6ff;fontFamily=Orbitron;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;dashed=1;dashPattern=6 4;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="92" width="660" height="348" as="geometry"/>
+                </mxCell>
+                <mxCell id="sandbox" value="Gitlab-runner Sandbox  ·  claude-agent image" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#05101a;strokeColor=#FF9933;fontColor=#25e8ff;fontFamily=Orbitron;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="140" width="420" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="agent" value="Claude CLI runs here" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0a1c26;strokeColor=light-dark(#ff24ed, #006a7e);fontColor=#e7feff;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="328" y="180" width="384" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="otelflags" value="OTel telemetry enabled" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="328" y="262" width="384" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="otel" value="OTel Collector&#xa;localhost:4318" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08161e;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="752" y="186" width="180" height="124" as="geometry"/>
+                </mxCell>
+                <mxCell id="elastic" value="Elastic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08161e;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="200" width="150" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="gateway" value="LLM Gateway (optional)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ff9d2e;fontColor=#ff9d2e;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="460" width="420" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="anthropic" value="Creation model&#xa;Anthropic API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#e7feff;fontFamily=Rajdhani;align=center;verticalAlign=middle;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="600" width="200" height="78" as="geometry"/>
+                </mxCell>
+                <mxCell id="reviewer" value="Review model&#xa;(independent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#160a1f;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;align=center;verticalAlign=middle;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="550" y="600" width="220" height="78" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="gitlab" target="pod" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="github" target="pod" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="agent" target="otelflags" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" value="OTLP events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="otelflags" target="otel" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" value="export" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="otel" target="elastic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" value="&lt;span&gt;messages&lt;/span&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#ff9d2e;fontColor=#ffc785;fontFamily=Rajdhani;" parent="1" source="agent" target="gateway" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" value="create (Agent)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="gateway" target="anthropic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="review (Advisor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;" parent="1" source="gateway" target="reviewer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>
