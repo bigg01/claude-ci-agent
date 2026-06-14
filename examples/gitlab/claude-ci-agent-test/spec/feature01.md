@@ -13,6 +13,8 @@ details from a specified URL (e.g. `https://ifconfig.me/all.json` or
   script runner with inline [PEP 723](https://peps.python.org/pep-0723/) metadata
   rather than a hand-managed virtualenv.
 - **HTTP client:** `httpx` (sync is sufficient for a single URL).
+- create a .gitignore for python 
+
 
 ## Acceptance criteria
 
@@ -27,6 +29,7 @@ details from a specified URL (e.g. `https://ifconfig.me/all.json` or
 - [ ] A unit test covers both the success path and a failure path (e.g. a timeout
       or invalid JSON), with the network call mocked.
 
+
 ## Out of scope
 
 - Persisting results to a file or database.
@@ -36,3 +39,5 @@ details from a specified URL (e.g. `https://ifconfig.me/all.json` or
 ## Constraints
 
 - Follow CLAUDE.MD coding standards. No third-party dependencies beyond `httpx`.
+
+

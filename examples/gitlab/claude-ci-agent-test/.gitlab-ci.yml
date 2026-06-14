@@ -5,7 +5,7 @@ stages:
 # 1. Primary Agent Configuration (Implements the spec)
 # -----------------------------------------------------------------------------
 include:
-  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.5
+  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.6
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -18,6 +18,12 @@ claude-agent:
   rules:
     - when: manual
       allow_failure: false
+
+# Disable the component's built-in advisor: this example ships its own
+# spec-graded `claude-agent-advisor` below, and we don't want two reviews per MR.
+claude-advisor:
+  rules:
+    - when: never
 
 # -----------------------------------------------------------------------------
 # 2. Advisor Configuration (Reviews the implementation, read-only)
@@ -35,7 +41,7 @@ claude-agent-advisor:
     # flag instead of `$[[ inputs.claude_args ]]` (which would reach claude
     # verbatim and fail the job).
     - |
-      claude -p "You are the ADVISOR (read-only). Review this change against \
+      claude_in_sandbox -p "You are the ADVISOR (read-only). Review this change against \
       spec/feature01.md. For EACH acceptance criterion, state PASS or FAIL with \
       file:line evidence. Run the tests and linters. List any criterion not met, \
       any out-of-scope work that slipped in, and any CLAUDE.MD violations. Write \
