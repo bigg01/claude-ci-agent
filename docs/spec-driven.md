@@ -83,7 +83,7 @@ a **manual** click so it only runs when you ask:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -111,17 +111,16 @@ The component already ships a `claude-advisor` that auto-runs on every merge
 request. When you want to grade specifically **against the spec** — and on a
 cheaper model than the implementer — define a custom advisor job. The example does
 exactly this: it `extends: .claude-base` (the component's hidden template that
-resolves secrets, starts the OTel sidecar, and defines the `claude_in_sandbox`
-helper) and supplies a spec-graded prompt:
+resolves secrets and starts the OTel sidecar) and supplies a spec-graded prompt:
 
 ```yaml
 claude-agent-advisor:
-  extends: .claude-base          # inherits secret setup + claude_in_sandbox
+  extends: .claude-base          # inherits secret setup + OTel sidecar
   variables:
     CLAUDE_MODEL: "claude-haiku-4-5"   # cheaper/faster reviewer than the agent
   script:
     - |
-      claude_in_sandbox -p "You are the ADVISOR (read-only). Review this change \
+      claude -p "You are the ADVISOR (read-only). Review this change \
       against spec/feature01.md. For EACH acceptance criterion, state PASS or FAIL \
       with file:line evidence. Run the tests and linters. List any criterion not \
       met, any out-of-scope work, and any CLAUDE.MD violations. Write the verdict \
@@ -131,8 +130,10 @@ claude-agent-advisor:
     - test -f review.md || echo "Advisor produced no review.md." > review.md
     - cat review.md
   artifacts: { when: always, paths: [review.md] }
+  # Auto-run only on the agent's own merge requests (branch `claude/task-<id>`),
+  # so the spec-graded review fires on agent MRs but not human-authored ones.
   rules:
-    - when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^claude\/task-/'
 ```
 
 !!! warning "`$[[ inputs.* ]]` only interpolates inside the component"
@@ -172,19 +173,31 @@ flowchart LR
   V -->|PASS| H["Human merges"]
 ```
 
-## The whole loop as one `include:` (GitLab)
+## Example configurations: simple → advanced → full loop
 
-Because the [component](ci-versions.md#gitlab-ci-using-the-claude-agent-component)
-ships **both personalities**, the minimal spec-driven loop is a single `include:` —
-no hand-written advisor/agent jobs. The `claude-advisor` job auto-runs on every
-merge request; the `claude-agent` job runs whenever you hand it a task:
+Three ready-to-copy GitLab configs, each a superset of the one before. All drive
+the same in-repo `spec/feature01.md` through the `claude-agent` component — pick the
+tier that matches how much automation you want.
+
+**Required CI/CD variables** (all tiers; Settings → CI/CD → Variables, mask +
+protect): `ANTHROPIC_API_KEY`, and a `GITLAB_TOKEN` with `api` scope (the agent
+pushes the branch and opens the MR; the advisor posts the note). Optionally set
+`ELASTIC_OTLP_ENDPOINT` / `ELASTIC_OTLP_AUTHORIZATION` to stream the
+[per-run cost](observability.md#per-run-cost) and secret-scrubbed audit trail to
+Elastic.
+
+### Simple — one `include:`
+
+The component ships **both personalities**, so a single include is the whole
+pipeline: `claude-advisor` auto-runs on every merge request; `claude-agent` runs
+whenever the prompt (or `$CLAUDE_TASK`) is non-empty.
 
 ```yaml
 stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
@@ -196,16 +209,6 @@ include:
       model: "claude-sonnet-4-6"
 ```
 
-!!! example "Runnable example — start here"
-
-    The copy-paste consuming project in
-    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)
-    is this include **plus** the two customizations from the steps above: it gates
-    `claude-agent` behind a manual click and adds a spec-graded `claude-agent-advisor`
-    on a cheaper model. Its [`spec/feature01.md`](https://github.com/bigg01/claude-ci-agent/blob/main/examples/gitlab/claude-ci-agent-test/spec/feature01.md)
-    is a real, gradeable feature — clone it into a GitLab project, set the two
-    variables below, and click the job. See its README to run it.
-
 What you get from the one include:
 
 | Job | Runs when | Does |
@@ -213,20 +216,56 @@ What you get from the one include:
 | `claude-agent` | `prompt` (or `$CLAUDE_TASK`) is non-empty | Implements `spec/feature01.md`, commits, opens a **new MR** |
 | `claude-advisor` | the resulting **merge request** opens / updates | Grades the diff against the spec, posts the verdict as an **MR note** |
 
-**Required CI/CD variables** (Settings → CI/CD → Variables; mask + protect):
-`ANTHROPIC_API_KEY` and a `GITLAB_TOKEN` with `api` scope (the agent uses it to
-push the branch and open the MR; the advisor uses it to post the note). Set
-`ELASTIC_OTLP_ENDPOINT` / `ELASTIC_OTLP_AUTHORIZATION` to stream the
-[per-run cost](observability.md#per-run-cost) and secret-scrubbed audit trail to
-Elastic.
+### Advanced — manual gate + spec-graded reviewer
 
-!!! tip "Grade the advisor against the spec, not in the abstract"
+The runnable [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)
+builds on the simple include with two changes: it gates the implementer behind a
+**manual** click, and adds a custom `claude-agent-advisor` that grades against the
+spec on a cheaper model. The advisor `extends: .claude-base`, so it inherits secret
+resolution and the OTel sidecar from the component:
 
-    The component's advisor prompt already says "review against the repository's
-    conventions"; for a spec-graded verdict, keep the spec file in the repo (the
-    advisor reads the working tree) and reference it by name in your acceptance
-    criteria. To customize the advisor's wording further, fork the component or use
-    the hand-written jobs shown under [Triggering from Jira](#triggering-from-jira-with-gitlab).
+```yaml
+# …the same include: as above, then:
+
+claude-agent:                      # gate the implementer behind a click
+  rules:
+    - when: manual
+      allow_failure: false
+
+claude-agent-advisor:              # spec-graded reviewer on a cheaper model
+  extends: .claude-base
+  variables:
+    CLAUDE_MODEL: "claude-haiku-4-5"
+  script:
+    - |
+      claude -p "ADVISOR (read-only): grade this change against \
+      spec/feature01.md — PASS/FAIL per criterion with file:line evidence; run the \
+      tests; write the verdict to review.md; do NOT modify, commit, or push." \
+        --model "$CLAUDE_MODEL" --dangerously-skip-permissions \
+        --output-format json > claude-result.json
+    - test -f review.md || echo "Advisor produced no review.md." > review.md
+    - cat review.md
+  artifacts:
+    when: always
+    paths: [review.md]
+  # Auto-review only the agent's own MRs — its branches are `claude/task-<id>`.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^claude\/task-/'
+```
+
+Clone the example, set the two variables, and click `claude-agent`. It implements
+the spec and opens an MR from a `claude/task-<id>` branch — which is exactly what
+the advisor's rule matches, so the spec-graded review runs automatically on that MR
+(and stays off human-authored MRs). See its README to run it. (Note the literal
+`--dangerously-skip-permissions` flag rather than `$[[ inputs.claude_args ]]` — see
+the interpolation warning in [step 3](#3-review-against-the-spec-advisor-personality).)
+
+### Full loop — tracker-driven, closes itself
+
+The most automated tier: the **Jira issue is the spec**, its status drives the
+cycle, and the Advisor's verdict flows back onto the ticket — implement → review →
+re-trigger on FAIL → human merge, with nobody hand-editing YAML per feature. See
+[Triggering from Jira](#triggering-from-jira-with-gitlab) below for the full wiring.
 
 ## Triggering from Jira (with GitLab)
 

@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.6
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.7
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -296,13 +296,15 @@ Both jobs start an **OTel Collector sidecar** (nested Podman) when
 the [OpenBao addon](secrets-openbao.md), and default to bypass-permissions
 ("YOLO") mode — safe here because the agent is [fully contained](yolo-mode.md).
 
-!!! note "Runner must allow nested Podman"
+!!! note "Claude runs in the job container; nested Podman is optional"
 
-    The OTel sidecar runs as nested rootless Podman inside the sandbox image
-    (the choice that mirrors the GitHub container job). Use a privileged or
-    rootless-Podman-capable runner. If yours can't, leave `ELASTIC_OTLP_ENDPOINT`
-    unset to skip the sidecar — the agent still runs; only the exported audit
-    trail is lost.
+    `claude` runs **directly in the job's container**, which *is* the rootless
+    sandbox image (the runner starts the job in it via `image:`) — there is no
+    second `podman run` wrapping Claude. Nested Podman is used only when needed:
+    to start the OTel sidecar, and by the agent itself when a task builds or tests
+    app images. So a plain run needs no nested Podman. If your runner can't do
+    nested rootless Podman, leave `ELASTIC_OTLP_ENDPOINT` unset to skip the sidecar
+    — the agent still runs; only the exported audit trail is lost.
 
 !!! example "Runnable example"
 
@@ -331,7 +333,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -343,7 +345,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.6` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.7` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable ⇒ protected ref"
 
@@ -356,7 +358,7 @@ The component reads the variable **by name** at runtime and exports it for the
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage both jobs run in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.6` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.7` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
 | `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
 | `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
@@ -458,7 +460,7 @@ Set as CI/CD variables (masked/protected, or minted at runtime by the
 stages: [implement, review]
 
 variables:
-  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.6
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.7
   CLAUDE_MODEL: "claude-sonnet-4-6"
   CLAUDE_CODE_ENABLE_TELEMETRY: "1"
   OTEL_LOG_TOOL_CONTENT: "1"

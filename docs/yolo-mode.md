@@ -18,10 +18,26 @@ or a vendor GPU/container sandbox such as NVIDIA's).
 
 ## Why the containment already exists
 
-- **Rootless, unprivileged container.** The agent runs as a non-root user in a
-  Podman container (see the [`Containerfile`](architecture.md)) on an OpenShift
-  GitLab Runner, with an arbitrary, non-root UID and no privilege escalation. The
-  blast radius of any command is the throwaway container, not a host.
+The sandbox is **not something this project bolts on** — it is provided by
+*where the job runs*. The GitLab Runner executes the pipeline job **inside the
+`claude-agent` image as a container** (its container/Kubernetes executor), and
+`claude` runs as that container's process. On a self-hosted/private runner
+deployed on **OpenShift**, that job pod is admitted under the `restricted-v2`
+SCC — arbitrary non-root UID, `allowPrivilegeEscalation: false`, dropped
+capabilities — so the platform *itself* enforces the rootless, unprivileged
+boundary. Either way the containment is a property of the runner, not of a
+wrapper we add around Claude.
+
+- **Rootless, unprivileged container.** `claude` runs **directly in** its
+  container — the [`claude-agent` image](architecture.md) — as a non-root user
+  with an arbitrary, non-root UID and no privilege escalation. It is *not* wrapped
+  in a nested `podman run`; the container *is* the sandbox. What runs that
+  container varies by platform — rootless **Podman** on a CI runner, or the
+  **Kubernetes CRI** (CRI-O on OpenShift, containerd on AKS) in the cloud — but the
+  rootless, unprivileged boundary is identical either way. The blast radius of any
+  command is the throwaway container, not a host. (Nested Podman is used only by
+  the agent itself, to build/test the app under review — see
+  [Architecture](architecture.md).)
 - **Ephemeral CI workspace.** Each run starts from a fresh image and is destroyed
   afterwards. There is no persistent state for a bad command to corrupt.
 - **Zero-credential environment.** No global Git credentials, SSH keys, or
