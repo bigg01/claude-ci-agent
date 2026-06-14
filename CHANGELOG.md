@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] — 2026-06-14
+
+### Fixed
+- **Agent committed its own `claude-result.json`.** The agent job's `git add -A`
+  swept the run-output file into the commit (often the *only* "change"). It is now
+  excluded from the commit (`git add -A -- ':!claude-result.json' ':!review.md'`)
+  while still uploaded as a job artifact — so the agent commits real work, or
+  cleanly reports "no file changes" and skips the push/MR.
+
+### Changed
+- Documented that `GITLAB_TOKEN` needs the **`write_repository`** scope (plus
+  `api`) and at least the **Developer** role — a read-only token gets a
+  `403 You are not allowed to push code to this project` on `git push`. Updated the
+  component input/header, the fail-fast error message, and the CI-versions /
+  spec-driven docs.
+- index.md "Start here" no longer says "two ways to run" (Kubernetes path was
+  removed in alpha.8); it now describes the single CI path. Pinned to `0.1.0-alpha.9`.
+
 ## [0.1.0-alpha.8] — 2026-06-14
 
 ### Removed
@@ -161,7 +179,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...HEAD
+[0.1.0-alpha.9]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9
 [0.1.0-alpha.8]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8
 [0.1.0-alpha.7]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6

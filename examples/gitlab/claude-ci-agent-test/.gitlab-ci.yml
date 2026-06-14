@@ -5,7 +5,7 @@ stages:
 # 1. Primary Agent Configuration (Implements the spec)
 # -----------------------------------------------------------------------------
 include:
-  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.8
+  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.9
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every

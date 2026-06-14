@@ -14,7 +14,8 @@ streamed to Elastic through an OpenTelemetry (OTel) Collector sidecar.
 
 ## Start here
 
-There are two ways to run the agent. Choose your path:
+Wire the agent into your CI— it runs the same rootless, OTel-audited sandbox on
+both platforms:
 
 <div class="grid cards" markdown>
 

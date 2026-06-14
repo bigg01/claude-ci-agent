@@ -1,6 +1,6 @@
 ---
 description: Cut a new release — bump every version pin, update the CHANGELOG, open the release PR, and tag after merge.
-argument-hint: "[next version, e.g. 0.1.0-alpha.8]"
+argument-hint: "[next version, e.g. 0.1.0-alpha.9]"
 allowed-tools: Bash(git:*), Bash(gh:*), Bash(grep:*), Bash(sed:*), Bash(python3:*), Read, Edit
 ---
 
