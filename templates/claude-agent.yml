@@ -27,9 +27,11 @@
 #   ANTHROPIC_API_KEY        Your team's Anthropic key (name overridable via the
 #                            api_key_variable input). Taken by NAME, never as an
 #                            input — inputs interpolate as plaintext and would leak.
-#   GITLAB_TOKEN             Project/group access token (api scope) used to post MR
-#                            notes and open MRs. Name overridable via token_variable.
-#                            CI_JOB_TOKEN is NOT sufficient for these API calls.
+#   GITLAB_TOKEN             Project/group access token used to push the branch and
+#                            open/comment on MRs. Needs the 'write_repository' AND
+#                            'api' scopes and at least the Developer role — a
+#                            read-only token gets a 403 on git push. Name overridable
+#                            via token_variable. CI_JOB_TOKEN is NOT sufficient.
 # Optional — telemetry export (no sidecar starts unless ELASTIC_OTLP_ENDPOINT set):
 #   ELASTIC_OTLP_ENDPOINT, ELASTIC_OTLP_AUTHORIZATION
 # Optional — OpenBao addon (mint secrets via this job's OIDC JWT, nothing stored):
@@ -56,7 +58,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.8
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.9
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -83,8 +85,9 @@ spec:
     token_variable:
       default: "GITLAB_TOKEN"
       description: >-
-        Name of the CI/CD variable holding a GitLab token (api scope) used to
-        post MR notes (advisor) and open MRs (agent). Pass the NAME, not the token.
+        Name of the CI/CD variable holding a GitLab token used to push the branch
+        and open/comment on MRs. Needs the 'write_repository' and 'api' scopes and
+        at least the Developer role. Pass the NAME, not the token.
     claude_args:
       default: "--dangerously-skip-permissions"
       description: >-
@@ -237,16 +240,22 @@ spec:
       TOKEN_VAR="$[[ inputs.token_variable ]]"
       eval "GL_TOKEN=\${$TOKEN_VAR:-}"
       if [ -z "$GL_TOKEN" ]; then
-        echo "ERROR: \$$TOKEN_VAR (api scope) is required to push a branch and open an MR." >&2
+        echo "ERROR: \$$TOKEN_VAR is required to push a branch and open an MR." >&2
+        echo "Use a project/group access token with the 'write_repository' AND 'api'" >&2
+        echo "scopes and at least the Developer role — a read-only token gets a 403" >&2
+        echo "'You are not allowed to push code to this project' on git push." >&2
         exit 1
       fi
       git config user.email "claude-agent@ci.local"
       git config user.name "Claude CI Agent"
       BRANCH="$[[ inputs.branch_prefix ]]${CI_PIPELINE_ID}"
       git checkout -b "$BRANCH"
-      git add -A
+      # Stage the agent's WORK only. Exclude this job's own run output
+      # (claude-result.json, review.md) — it stays on disk for the artifact
+      # upload below, but must never land in the agent's commit.
+      git add -A -- ':!claude-result.json' ':!review.md'
       if git diff --cached --quiet; then
-        echo "Agent made no changes — nothing to push." >&2
+        echo "Agent made no file changes — nothing to push." >&2
         exit 0
       fi
       git commit -m "feat: automated change by Claude agent"

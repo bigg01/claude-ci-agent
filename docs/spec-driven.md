@@ -83,7 +83,7 @@ a **manual** click so it only runs when you ask:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.9
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -180,8 +180,10 @@ the same in-repo `spec/feature01.md` through the `claude-agent` component — pi
 tier that matches how much automation you want.
 
 **Required CI/CD variables** (all tiers; Settings → CI/CD → Variables, mask +
-protect): `ANTHROPIC_API_KEY`, and a `GITLAB_TOKEN` with `api` scope (the agent
-pushes the branch and opens the MR; the advisor posts the note). Optionally set
+protect): `ANTHROPIC_API_KEY`, and a `GITLAB_TOKEN` with the `write_repository` and
+`api` scopes and at least the **Developer** role (the agent pushes the branch and
+opens the MR; the advisor posts the note). A read-only token gets a 403 on push.
+Optionally set
 `ELASTIC_OTLP_ENDPOINT` / `ELASTIC_OTLP_AUTHORIZATION` to stream the
 [per-run cost](observability.md#per-run-cost) and secret-scrubbed audit trail to
 Elastic.
@@ -197,7 +199,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.9
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
