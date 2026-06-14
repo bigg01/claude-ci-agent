@@ -58,7 +58,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.10
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.11
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -255,7 +255,15 @@ spec:
       # upload below, but must never land in the agent's commit.
       git add -A -- ':!claude-result.json' ':!review.md'
       if git diff --cached --quiet; then
-        echo "Agent made no file changes — nothing to push." >&2
+        echo "⚠ Agent produced NO file changes — so no branch/MR was created and the" >&2
+        echo "  advisor has nothing to review. What the agent reported:" >&2
+        jq -r '.result // "(no result text)"' claude-result.json | sed 's/^/    /' >&2
+        echo "  Unstaged working-tree state (empty = the agent wrote nothing):" >&2
+        git status --porcelain | sed 's/^/    /' >&2 || true
+        echo "  If you expected changes: confirm the task/spec is in the repo, and run" >&2
+        echo "  the IMPLEMENTER on a capable model (claude-sonnet-4-6 / opus — a small" >&2
+        echo "  model like haiku often stalls on autonomous multi-file work). Note that" >&2
+        echo "  a project CLAUDE_MODEL CI/CD variable overrides the component default." >&2
         exit 0
       fi
       git commit -m "feat: automated change by Claude agent"

@@ -8,6 +8,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] — 2026-06-14
+
+### Changed
+- **A no-change agent run now explains itself.** When `claude-agent` makes no file
+  edits, the job log prints what Claude reported (from `claude-result.json`), the
+  unstaged working-tree state, and a hint to check the spec is present and that the
+  implementer runs on a capable model (a project `CLAUDE_MODEL` CI/CD variable
+  overrides the component default — `haiku` often stalls on autonomous multi-file
+  work, so use `claude-sonnet-4-6`/opus for the implementer). Previously it just
+  said "nothing to push" and exited green, hiding why.
+
 ## [0.1.0-alpha.10] — 2026-06-14
 
 ### Added
@@ -192,7 +203,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.10...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.11...HEAD
+[0.1.0-alpha.11]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11
 [0.1.0-alpha.10]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10
 [0.1.0-alpha.9]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9
 [0.1.0-alpha.8]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8
