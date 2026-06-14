@@ -5,7 +5,7 @@ stages:
 # 1. Primary Agent Configuration (Implements the spec)
 # -----------------------------------------------------------------------------
 include:
-  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.9
+  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.10
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -13,8 +13,21 @@ include:
         Do not implement anything listed under "Out of scope".
       model: "claude-sonnet-4-6"
 
-# Make the primary agent execution manual
+# Make the primary agent execution manual, and fail loudly if the spec this
+# example implements isn't in the repo — otherwise the agent runs, finds nothing
+# to do, and exits with "no file changes". The `!reference` re-injects the
+# component's base setup (secret resolution + OTel sidecar), because a job-level
+# `before_script` here would otherwise replace the inherited one.
 claude-agent:
+  before_script:
+    - |
+      test -f spec/feature01.md || {
+        echo "ERROR: spec/feature01.md not found in this repository." >&2
+        echo "This example implements that spec — copy it from the example's" >&2
+        echo "spec/ folder into your project root, commit, and re-run." >&2
+        exit 1
+      }
+    - !reference [".claude-base", before_script]
   rules:
     - when: manual
       allow_failure: false

@@ -58,7 +58,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.9
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.10
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -260,7 +260,7 @@ spec:
       fi
       git commit -m "feat: automated change by Claude agent"
       git push "https://oauth2:${GL_TOKEN}@${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}.git" "$BRANCH"
-      jq -n \
+      MR_RESP="$(jq -n \
         --arg s "$BRANCH" \
         --arg t "${CI_DEFAULT_BRANCH:-main}" \
         --arg title "Claude agent: $CLAUDE_TASK" \
@@ -269,7 +269,16 @@ spec:
           -H "PRIVATE-TOKEN: $GL_TOKEN" \
           -H "Content-Type: application/json" \
           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests" \
-          -d @-
+          -d @-)"
+      # Summary of what the agent actually did (only reached when it changed files).
+      echo "──────────────── Claude agent summary ────────────────"
+      echo "Branch:  $BRANCH → ${CI_DEFAULT_BRANCH:-main}"
+      echo "MR:      $(printf '%s' "$MR_RESP" | jq -r '.web_url // "(MR not created — check the token role/scope)"')"
+      echo "Files changed:"
+      git show --stat --format= HEAD | sed 's/^/  /'
+      echo "What the agent reports doing:"
+      jq -r '.result // "(no result text)"' claude-result.json | sed 's/^/  /'
+      echo "───────────────────────────────────────────────────────"
   # Keep the raw Claude run output (usage, cost, result) as a downloadable
   # artifact — `when: always` so it survives a failed push / MR creation.
   artifacts:
