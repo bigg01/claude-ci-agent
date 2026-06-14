@@ -8,6 +8,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.6] — 2026-06-14
+
+### Changed
+- **Claude now runs inside a nested rootless-Podman sandbox.** The GitLab
+  component's `claude-advisor`/`claude-agent` jobs no longer exec `claude`
+  directly in the job shell — a new `claude_in_sandbox` helper launches it with
+  `podman run` in a fresh copy of the pinned sandbox image, mounting only the
+  working tree (`$CI_PROJECT_DIR`) and passing secrets/OTel context by name. The
+  example's custom advisor uses the same helper.
+- Pinned chart/component/action/docs to `0.1.0-alpha.6`.
+
+### Fixed
+- Pinned the nested container's process to the checkout owner with
+  `--userns=keep-id --user "$(id -u):$(id -g)"` so files Claude writes round-trip
+  back owned by the job user — otherwise the agent's `git commit`/`push` and the
+  advisor's `review.md` read could fail with permission errors. Verified locally.
+
 ## [0.1.0-alpha.5] — 2026-06-14
 
 ### Added
@@ -91,7 +108,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.4...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...HEAD
+[0.1.0-alpha.6]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
+[0.1.0-alpha.5]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.1...v0.1.0-alpha.2

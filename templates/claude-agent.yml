@@ -41,11 +41,14 @@
 # CI variable is exposed to every job, log, and cache — short-lived +
 # workspace-scoped + spend-capped shrinks both the window and the blast radius.
 #
-# NOTE — both jobs run nested Podman (the OTel sidecar) inside the sandbox image,
-# so the GitLab runner must permit rootless Podman (a privileged runner, or a
-# runner configured for rootless containers). This mirrors the GitHub workflow's
-# container job. If your runner cannot, set ELASTIC_OTLP_ENDPOINT empty to skip
-# the sidecar — the agent still runs; only the exported audit trail is lost.
+# NOTE — `claude` itself is launched with `podman run` in a FRESH copy of the
+# pinned sandbox image (see the claude_in_sandbox helper below), not directly in
+# the job shell. Only the working tree is mounted in; secrets and OTel context are
+# passed by name. The OTel sidecar is a second nested-Podman container. So the
+# GitLab runner must permit rootless Podman (a privileged runner, or one
+# configured for rootless containers) — this mirrors the GitHub workflow's
+# container job. Setting ELASTIC_OTLP_ENDPOINT empty only skips the sidecar; the
+# agent still requires rootless Podman to run claude.
 #
 # Reference: https://docs.gitlab.com/ee/ci/components/
 spec:
@@ -54,7 +57,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.5
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.6
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -153,6 +156,33 @@ spec:
       else
         echo "ELASTIC_OTLP_ENDPOINT unset — skipping OTel sidecar (no export)." >&2
       fi
+    # 4. Define the wrapper that runs `claude` in a FRESH rootless-Podman
+    #    container off the pinned sandbox image — not directly in this job shell.
+    #    Both jobs call `claude_in_sandbox …` exactly as they would call `claude …`.
+    #      * only the checked-out working tree is mounted (rw) — claude sees the
+    #        repo and writes changes/review.md straight back to $CI_PROJECT_DIR;
+    #      * secrets + OTel context are passed BY NAME (-e VAR), never baked in;
+    #      * --network host shares the job's netns so localhost:4318 still reaches
+    #        the OTel sidecar started above;
+    #      * --userns=keep-id + --user "$(id -u):$(id -g)" pin the container
+    #        process to the job user that owns the checkout, so files claude
+    #        writes stay owned by us — the later git commit/push (agent) and
+    #        review.md read (advisor) work without permission errors. (keep-id
+    #        alone suffices when the job user matches the image's baked user;
+    #        the explicit --user makes the mount round-trip robust if it doesn't.)
+    - |
+      CLAUDE_SANDBOX_IMAGE="$[[ inputs.image ]]"
+      claude_in_sandbox() {
+        podman run --rm --network host \
+          --userns=keep-id --user "$(id -u):$(id -g)" \
+          -e ANTHROPIC_API_KEY -e CLAUDE_MODEL \
+          -e CLAUDE_CODE_ENABLE_TELEMETRY -e OTEL_LOG_TOOL_CONTENT \
+          -e OTEL_METRICS_EXPORTER -e OTEL_LOGS_EXPORTER \
+          -e OTEL_EXPORTER_OTLP_PROTOCOL -e OTEL_EXPORTER_OTLP_ENDPOINT \
+          -e OTEL_METRIC_EXPORT_INTERVAL -e OTEL_RESOURCE_ATTRIBUTES \
+          -v "$CI_PROJECT_DIR:/workspace:rw,Z" -w /workspace \
+          "$CLAUDE_SANDBOX_IMAGE" claude "$@"
+      }
   after_script:
     # Flush before teardown: wait out the collector batch timeout (5s) + metric
     # export interval (5s) so the final datapoints reach Elastic, then stop it.
@@ -172,7 +202,7 @@ spec:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
     - |
-      claude -p "You are the ADVISOR personality (read-only). Review this merge \
+      claude_in_sandbox -p "You are the ADVISOR personality (read-only). Review this merge \
       request against the repository's conventions (CLAUDE.md / CONTRIBUTING if \
       present). Run linters and tests, flag bugs and risks, and write your review \
       to review.md. You MUST NOT modify project files, commit, or push — recommend \
@@ -201,7 +231,7 @@ spec:
 # request. Triggered by a non-empty CLAUDE_TASK (the `prompt` input, or a
 # pipeline variable from a manual run / trigger token / webhook).
 # ---------------------------------------------------------------------------
-"claude-agent":
+"claude-agent-coder":
   extends: ".claude-base"
   variables:
     # Default the task to the prompt input; a CLAUDE_TASK pipeline variable
@@ -211,7 +241,7 @@ spec:
     - if: '$CLAUDE_TASK != ""'
   script:
     - |
-      claude -p "You are the AGENT personality (read-write). Task: $CLAUDE_TASK. \
+      claude_in_sandbox -p "You are the AGENT personality (read-write). Task: $CLAUDE_TASK. \
       Work per the repository's conventions, and make atomic, conventional-commit- \
       style changes." \
         --model "$CLAUDE_MODEL" $[[ inputs.claude_args ]] \

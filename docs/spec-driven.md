@@ -37,25 +37,35 @@ flowchart LR
 Keep specs in the repo so they are versioned, reviewed, and reachable by the agent.
 A simple convention is one file per feature under `spec/`. The spec can be authored
 by hand— or generated from a **Jira issue's** acceptance criteria when Jira is your
-tracker (see [Triggering from Jira](#triggering-from-jira-with-gitlab) below):
+tracker (see [Triggering from Jira](#triggering-from-jira-with-gitlab) below).
+
+The runnable GitLab example in
+[`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)
+ships this [`spec/feature01.md`](https://github.com/bigg01/claude-ci-agent/blob/main/examples/gitlab/claude-ci-agent-test/spec/feature01.md)
+— a small, self-contained feature whose criteria are concrete enough for the
+Advisor to grade pass/fail:
 
 ```markdown
-# spec/export-csv.md
+# spec/feature01.md — IP Config Scraper
 
 ## Goal
-Let a user export their dashboard data as CSV from the report page.
+A single-file Python script that fetches IP / network config from a URL
+(e.g. https://httpbin.org/ip) and pretty-prints the result.
 
 ## Acceptance criteria
-- [ ] A "Download CSV" button appears on `/reports`.
-- [ ] The CSV includes a header row and one row per record, UTF-8 encoded.
-- [ ] Empty result sets produce a header-only file, not an error.
-- [ ] A unit test covers the empty and non-empty cases.
+- [ ] A single script fetches a target URL, defaulting to a reliable JSON IP API.
+- [ ] The target URL is overridable via a command-line argument.
+- [ ] JSON responses are pretty-printed; non-JSON responses are printed as text.
+- [ ] Timeouts, network failures, and invalid JSON exit non-zero with a clear
+      error — no traceback.
+- [ ] Dependencies are declared inline via PEP 723 so `uv run` needs no install.
+- [ ] A unit test covers a success and a failure path, with the network mocked.
 
 ## Out of scope
-- Excel/XLSX export, scheduled exports.
+- Persisting results; concurrent/async fetching; any web server.
 
 ## Constraints
-- Follow CLAUDE.MD coding standards. No new third-party dependencies.
+- Follow CLAUDE.MD coding standards. No third-party dependencies beyond `httpx`.
 ```
 
 !!! tip "Acceptance criteria are the review rubric"
@@ -66,50 +76,76 @@ Let a user export their dashboard data as CSV from the report page.
 ## 2. Implement from the spec (Agent personality)
 
 Trigger the **read-write** [Agent](ci-versions.md#personalities-triggers) and point
-its task at the spec file rather than describing the work inline. With the GitLab
-component:
+its task at the spec file rather than describing the work inline. This is exactly
+what the example's [`.gitlab-ci.yml`](https://github.com/bigg01/claude-ci-agent/blob/main/examples/gitlab/claude-ci-agent-test/.gitlab-ci.yml)
+does — the `prompt` names the spec, and a `rules:` override gates the agent behind
+a **manual** click so it only runs when you ask:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v1
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
     inputs:
       prompt: >-
-        Implement the specification in spec/export-csv.md exactly. Satisfy every
+        Implement the specification in spec/feature01.md exactly. Satisfy every
         acceptance criterion, add the tests it requires, and follow CLAUDE.MD.
         Do not implement anything listed under "Out of scope".
+      model: "claude-sonnet-4-6"
+
+# Gate the implementer behind a manual click (omit to run it automatically).
+claude-agent:
+  rules:
+    - when: manual
+      allow_failure: false
 ```
 
-…or with the GitHub Action:
-
-```yaml
-- uses: bigg01/claude-ci-agent@v1
-  with:
-    prompt: >-
-      Implement the specification in spec/export-csv.md exactly. Satisfy every
-      acceptance criterion, add the tests it requires, and follow CLAUDE.MD.
-    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-The Agent works in the sandbox, makes atomic commits, and opens a **new branch /
-PR**— it never pushes to the default branch (see
-[Personalities & triggers](ci-versions.md#personalities-triggers)).
+The Agent runs `claude` inside a fresh rootless-Podman sandbox off the pinned image
+(only the working tree is mounted in), makes atomic commits, and opens a **new
+branch / MR**— it never pushes to the default branch (see
+[Personalities & triggers](ci-versions.md#personalities-triggers)). The same
+`prompt` input works for the [GitHub Action](ci-versions.md#github-actions-using-the-claude-ci-agent-action)
+if GitHub is your SCM.
 
 ## 3. Review against the spec (Advisor personality)
 
-When the PR/MR opens, the **read-only** Advisor runs automatically. Give it a prompt
-that grades against the spec rather than reviewing in the abstract:
+The component already ships a `claude-advisor` that auto-runs on every merge
+request. When you want to grade specifically **against the spec** — and on a
+cheaper model than the implementer — define a custom advisor job. The example does
+exactly this: it `extends: .claude-base` (the component's hidden template that
+resolves secrets, starts the OTel sidecar, and defines the `claude_in_sandbox`
+helper) and supplies a spec-graded prompt:
 
-```text
-You are the ADVISOR (read-only). Review this change against spec/export-csv.md.
-For EACH acceptance criterion, state PASS or FAIL with the file:line evidence.
-Run the tests and linters. List any criterion not met, any out-of-scope work that
-slipped in, and any CLAUDE.MD violations. Write the verdict to review.md. Do not
-modify files.
+```yaml
+claude-agent-advisor:
+  extends: .claude-base          # inherits secret setup + claude_in_sandbox
+  variables:
+    CLAUDE_MODEL: "claude-haiku-4-5"   # cheaper/faster reviewer than the agent
+  script:
+    - |
+      claude_in_sandbox -p "You are the ADVISOR (read-only). Review this change \
+      against spec/feature01.md. For EACH acceptance criterion, state PASS or FAIL \
+      with file:line evidence. Run the tests and linters. List any criterion not \
+      met, any out-of-scope work, and any CLAUDE.MD violations. Write the verdict \
+      to review.md. You MUST NOT modify, commit, or push any files." \
+        --model "$CLAUDE_MODEL" --dangerously-skip-permissions \
+        --output-format json > claude-result.json
+    - test -f review.md || echo "Advisor produced no review.md." > review.md
+    - cat review.md
+  artifacts: { when: always, paths: [review.md] }
+  rules:
+    - when: manual
 ```
 
+!!! warning "`$[[ inputs.* ]]` only interpolates inside the component"
+
+    Component-input interpolation (e.g. `$[[ inputs.claude_args ]]`) works **only**
+    within the component template itself, not in your consuming `.gitlab-ci.yml`.
+    Used here it would reach the CLI verbatim and fail the job — pass a literal
+    flag instead. This is the one gotcha the example exists to demonstrate.
+
 Because the Advisor holds **no write token**, it cannot "fix and approve" its own
-finding— it can only report. The verdict is posted as a PR/MR comment, and the per-
-run cost lands in [telemetry](observability.md#per-run-cost).
+finding— it can only report. The verdict lands in `review.md` (artifact) and, for
+the built-in `claude-advisor`, as an MR note; the per-run cost lands in
+[telemetry](observability.md#per-run-cost).
 
 !!! tip "Independent reviewer"
 
@@ -122,8 +158,8 @@ run cost lands in [telemetry](observability.md#per-run-cost).
 The review feeds back into the same spec-driven cycle:
 
 1. **Advisor reports FAIL on a criterion** → comment `@claude address review.md
-   findings for spec/export-csv.md` to re-trigger the Agent on the existing branch.
-2. **Spec was wrong, not the code** → edit `spec/export-csv.md`, and both the next
+   findings for spec/feature01.md` to re-trigger the Agent on the existing branch.
+2. **Spec was wrong, not the code** → edit `spec/feature01.md`, and both the next
    implementation and the next review track the change automatically.
 3. **All criteria PASS** → a human merges. The agent never self-approves a merge.
 
@@ -139,41 +175,42 @@ flowchart LR
 ## The whole loop as one `include:` (GitLab)
 
 Because the [component](ci-versions.md#gitlab-ci-using-the-claude-agent-component)
-ships **both personalities**, the entire spec-driven loop is a single `include:` —
+ships **both personalities**, the minimal spec-driven loop is a single `include:` —
 no hand-written advisor/agent jobs. The `claude-advisor` job auto-runs on every
-merge request; the `claude-agent` job runs whenever you hand it a task. Drop this
-in the consuming project's `.gitlab-ci.yml`:
-
-!!! example "Runnable example"
-
-    A copy-paste consuming project — `.gitlab-ci.yml` plus a `spec/feature01.md` —
-    lives in
-    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test).
-    It gates the agent behind a manual click and pins the advisor to a cheaper
-    model; see its README to run it.
+merge request; the `claude-agent` job runs whenever you hand it a task:
 
 ```yaml
 stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.5
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.6
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
       prompt: >-
-        Implement the specification in spec/export-csv.md exactly. Satisfy every
+        Implement the specification in spec/feature01.md exactly. Satisfy every
         acceptance criterion, add the tests it requires, and follow CLAUDE.MD.
         Do not implement anything listed under "Out of scope".
       # Independent reviewer: grade with a different model than the agent writes with.
       model: "claude-sonnet-4-6"
 ```
 
-That's the whole pipeline. What you get from the one include:
+!!! example "Runnable example — start here"
+
+    The copy-paste consuming project in
+    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)
+    is this include **plus** the two customizations from the steps above: it gates
+    `claude-agent` behind a manual click and adds a spec-graded `claude-agent-advisor`
+    on a cheaper model. Its [`spec/feature01.md`](https://github.com/bigg01/claude-ci-agent/blob/main/examples/gitlab/claude-ci-agent-test/spec/feature01.md)
+    is a real, gradeable feature — clone it into a GitLab project, set the two
+    variables below, and click the job. See its README to run it.
+
+What you get from the one include:
 
 | Job | Runs when | Does |
 | --- | --- | --- |
-| `claude-agent` | `prompt` (or `$CLAUDE_TASK`) is non-empty | Implements `spec/export-csv.md`, commits, opens a **new MR** |
+| `claude-agent` | `prompt` (or `$CLAUDE_TASK`) is non-empty | Implements `spec/feature01.md`, commits, opens a **new MR** |
 | `claude-advisor` | the resulting **merge request** opens / updates | Grades the diff against the spec, posts the verdict as an **MR note** |
 
 **Required CI/CD variables** (Settings → CI/CD → Variables; mask + protect):

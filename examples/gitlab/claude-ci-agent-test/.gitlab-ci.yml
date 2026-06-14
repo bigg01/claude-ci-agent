@@ -5,7 +5,7 @@ stages:
 # 1. Primary Agent Configuration (Implements the spec)
 # -----------------------------------------------------------------------------
 include:
-  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.5
+  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.6
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -14,7 +14,7 @@ include:
       model: "claude-sonnet-4-6"
 
 # Make the primary agent execution manual
-claude-agent:
+claude-agent-coder:
   rules:
     - when: manual
       allow_failure: false
@@ -35,7 +35,7 @@ claude-agent-advisor:
     # flag instead of `$[[ inputs.claude_args ]]` (which would reach claude
     # verbatim and fail the job).
     - |
-      claude -p "You are the ADVISOR (read-only). Review this change against \
+      claude_in_sandbox -p "You are the ADVISOR (read-only). Review this change against \
       spec/feature01.md. For EACH acceptance criterion, state PASS or FAIL with \
       file:line evidence. Run the tests and linters. List any criterion not met, \
       any out-of-scope work that slipped in, and any CLAUDE.MD violations. Write \
