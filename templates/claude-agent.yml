@@ -231,7 +231,7 @@ spec:
 # request. Triggered by a non-empty CLAUDE_TASK (the `prompt` input, or a
 # pipeline variable from a manual run / trigger token / webhook).
 # ---------------------------------------------------------------------------
-"claude-agent-coder":
+"claude-agent":
   extends: ".claude-base"
   variables:
     # Default the task to the prompt input; a CLAUDE_TASK pipeline variable

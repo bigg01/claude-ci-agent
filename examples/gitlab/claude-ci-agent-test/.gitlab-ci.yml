@@ -14,10 +14,16 @@ include:
       model: "claude-sonnet-4-6"
 
 # Make the primary agent execution manual
-claude-agent-coder:
+claude-agent:
   rules:
     - when: manual
       allow_failure: false
+
+# Disable the component's built-in advisor: this example ships its own
+# spec-graded `claude-agent-advisor` below, and we don't want two reviews per MR.
+claude-advisor:
+  rules:
+    - when: never
 
 # -----------------------------------------------------------------------------
 # 2. Advisor Configuration (Reviews the implementation, read-only)
