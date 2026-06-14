@@ -144,12 +144,20 @@ no hand-written advisor/agent jobs. The `claude-advisor` job auto-runs on every
 merge request; the `claude-agent` job runs whenever you hand it a task. Drop this
 in the consuming project's `.gitlab-ci.yml`:
 
+!!! example "Runnable example"
+
+    A copy-paste consuming project — `.gitlab-ci.yml` plus a `spec/feature01.md` —
+    lives in
+    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test).
+    It gates the agent behind a manual click and pins the advisor to a cheaper
+    model; see its README to run it.
+
 ```yaml
 stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.5
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).

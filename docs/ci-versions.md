@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.4
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.5
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.5
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -304,6 +304,16 @@ the [OpenBao addon](secrets-openbao.md), and default to bypass-permissions
     unset to skip the sidecar — the agent still runs; only the exported audit
     trail is lost.
 
+!!! example "Runnable example"
+
+    A copy-paste consuming project — `.gitlab-ci.yml` plus a `spec/feature01.md` —
+    lives in
+    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test).
+    It gates the agent behind a manual click, pins the advisor to a cheaper model,
+    and shows how to add a custom advisor job that reuses the component's hidden
+    `.claude-base` template. See [Spec-driven development](spec-driven.md) for the
+    full implement-then-review loop it demonstrates.
+
 **Step 1 — set the Anthropic key as a CI/CD variable** (this is how the key is
 provided; it is **never** a component input). In the consuming project (or group):
 **Settings → CI/CD → Variables → Add variable**:
@@ -321,7 +331,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.4
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.5
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -333,7 +343,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.4` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.5` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable ⇒ protected ref"
 
@@ -346,7 +356,7 @@ The component reads the variable **by name** at runtime and exports it for the
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage both jobs run in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.4` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.5` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
 | `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
 | `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
@@ -448,7 +458,7 @@ Set as CI/CD variables (masked/protected, or minted at runtime by the
 stages: [implement, review]
 
 variables:
-  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.4
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.5
   CLAUDE_MODEL: "claude-sonnet-4-6"
   CLAUDE_CODE_ENABLE_TELEMETRY: "1"
   OTEL_LOG_TOOL_CONTENT: "1"

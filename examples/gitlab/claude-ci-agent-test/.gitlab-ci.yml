@@ -1,0 +1,54 @@
+stages:
+  - test
+
+# -----------------------------------------------------------------------------
+# 1. Primary Agent Configuration (Implements the spec)
+# -----------------------------------------------------------------------------
+include:
+  - component: $CI_SERVER_FQDN/bigg01/claude-ci-agent/claude-agent@v0.1.0-alpha.5
+    inputs:
+      prompt: >-
+        Implement the specification in spec/feature01.md exactly. Satisfy every
+        acceptance criterion, add the tests it requires, and follow CLAUDE.MD.
+        Do not implement anything listed under "Out of scope".
+      model: "claude-sonnet-4-6"
+
+# Make the primary agent execution manual
+claude-agent:
+  rules:
+    - when: manual
+      allow_failure: false
+
+# -----------------------------------------------------------------------------
+# 2. Advisor Configuration (Reviews the implementation, read-only)
+# -----------------------------------------------------------------------------
+# Reuses the component's hidden base template (.claude-base) for secret
+# resolution, the OTel sidecar, and teardown. The base intentionally has no
+# `script:`, so we supply a read-only review script here.
+claude-agent-advisor:
+  extends: .claude-base
+  variables:
+    CLAUDE_MODEL: "claude-haiku-4-5" # faster/cheaper model for review
+  script:
+    # NOTE: `$[[ inputs.* ]]` interpolation works ONLY inside the component
+    # template, not here in the consuming project file — so we pass a literal
+    # flag instead of `$[[ inputs.claude_args ]]` (which would reach claude
+    # verbatim and fail the job).
+    - |
+      claude -p "You are the ADVISOR (read-only). Review this change against \
+      spec/feature01.md. For EACH acceptance criterion, state PASS or FAIL with \
+      file:line evidence. Run the tests and linters. List any criterion not met, \
+      any out-of-scope work that slipped in, and any CLAUDE.MD violations. Write \
+      the verdict to review.md. You MUST NOT modify, commit, or push any files." \
+        --model "$CLAUDE_MODEL" --dangerously-skip-permissions \
+        --output-format json > claude-result.json
+    - python3 /opt/claude-ci/emit_cost.py claude-result.json || true
+    - test -f review.md || echo "Advisor produced no review.md." > review.md
+    - cat review.md
+  artifacts:
+    when: always
+    paths:
+      - review.md
+  rules:
+    - when: manual
+      allow_failure: false

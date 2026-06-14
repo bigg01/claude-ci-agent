@@ -8,6 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.5] — 2026-06-14
+
+### Added
+- **Runnable GitLab example.** [`examples/gitlab/claude-ci-agent-test/`](examples/gitlab/claude-ci-agent-test/)
+  is a copy-paste consuming project (`.gitlab-ci.yml` + `spec/feature01.md`) that
+  gates the agent behind a manual click, pins the advisor to a cheaper model, and
+  shows a custom advisor job extending the component's hidden `.claude-base`
+  template. Linked from both the [CI Versions](docs/ci-versions.md) and
+  [Spec-driven](docs/spec-driven.md) docs.
+
+### Fixed
+- Example advisor job passed `$[[ inputs.claude_args ]]` from a *consuming*
+  project, where component-input interpolation doesn't apply — it reached the
+  `claude` CLI verbatim and failed the job. Replaced with a literal flag and
+  documented the gotcha.
+
+### Changed
+- Pinned chart/component/action/docs to `0.1.0-alpha.5`.
+
 ## [0.1.0-alpha.4] — 2026-06-13
 
 ### Added
