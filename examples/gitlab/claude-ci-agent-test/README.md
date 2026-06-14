@@ -35,7 +35,7 @@ spots.
      sufficient.
    - *(optional)* `ELASTIC_OTLP_ENDPOINT` / `ELASTIC_OTLP_AUTHORIZATION` to stream
      the secret-scrubbed audit trail and per-run cost to Elastic.
-2. **Pin the component version.** This example uses `@v0.1.0-alpha.9`; bump it to
+2. **Pin the component version.** This example uses `@v0.1.0-alpha.10`; bump it to
    the latest [release](https://github.com/bigg01/claude-ci-agent/releases) and
    update the matching image tag the component pins.
 3. **Click `claude-agent`** in the pipeline. It implements the spec and opens an

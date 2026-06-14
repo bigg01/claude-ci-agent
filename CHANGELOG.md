@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] — 2026-06-14
+
+### Added
+- **Agent run summary.** When the `claude-agent` job actually changes files, it now
+  prints a summary — branch, MR URL, the list of changed files, and what Claude
+  reports doing (from `claude-result.json`) — so a successful run is legible in the
+  job log instead of just a bare push.
+- **Example fails loudly on a missing spec.** The example's `claude-agent` checks
+  that `spec/feature01.md` exists before invoking Claude (re-injecting the
+  component's base setup via `!reference`); otherwise the agent would run, find
+  nothing to implement, and exit "no file changes". It now errors with a copy-the-
+  spec hint instead.
+
 ## [0.1.0-alpha.9] — 2026-06-14
 
 ### Fixed
@@ -179,7 +192,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.10...HEAD
+[0.1.0-alpha.10]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10
 [0.1.0-alpha.9]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9
 [0.1.0-alpha.8]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8
 [0.1.0-alpha.7]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
