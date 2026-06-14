@@ -83,7 +83,7 @@ a **manual** click so it only runs when you ask:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.10
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.11
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -199,7 +199,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.10
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.11
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
