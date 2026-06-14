@@ -8,6 +8,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.7] — 2026-06-14
+
+### Changed
+- **Reverted the alpha.6 nested-Podman wrapper.** `claude` again runs **directly
+  in the job's container** — which *is* the rootless sandbox the GitLab Runner (or
+  a private runner on OpenShift) starts from the image. The alpha.6
+  `claude_in_sandbox` helper wrapped Claude in a second `podman run`, which
+  required nested rootless Podman with `/etc/subuid`/`subgid` ranges that typical
+  runners don't grant — so image unpack failed (`no subuid ranges found … lchown:
+  invalid argument`) before Claude could start. Nested Podman is now used only
+  where it was always needed: the OTel sidecar, and the agent's own app
+  build/test. Pinned to `0.1.0-alpha.7`.
+
+### Docs
+- Clarified across [architecture](docs/architecture.md), [yolo-mode](docs/yolo-mode.md),
+  [spec-driven](docs/spec-driven.md), and [ci-versions](docs/ci-versions.md) that
+  the sandbox is **the job container the runner provides** — not a wrapper this
+  project adds — and that the runtime is rootless Podman on a CI runner or the
+  Kubernetes CRI (CRI-O/containerd) on a private OpenShift/AKS runner. Claude is
+  never wrapped in a nested `podman run`.
+
 ## [0.1.0-alpha.6] — 2026-06-14
 
 ### Changed
@@ -108,7 +129,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...HEAD
+[0.1.0-alpha.7]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
 [0.1.0-alpha.5]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
