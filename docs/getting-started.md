@@ -11,7 +11,6 @@ telemetry. Each step is self-contained— stop wherever you have what you need.
 
     - [uv](https://docs.astral.sh/uv/)— Python package & environment management
     - [Podman](https://podman.io/)— rootless container builds (not Docker)
-    - A cluster + `kubectl` if you intend to deploy (AKS or OpenShift)
     - An `ANTHROPIC_API_KEY` for live agent runs
 
 ## Step 1— Clone the repository
@@ -64,35 +63,7 @@ ANTHROPIC_API_KEY=… make test-e2e   # also exercise the live agent
 
 A green run ends with `✓ e2e passed`.
 
-## Step 6— Deploy to Kubernetes (AKS or OpenShift)
-
-Push the image to a registry your cluster can pull from, then set the API key and
-apply the manifests.
-
-```bash
-# 1. create the API-key secret
-kubectl create secret generic claude-agent-secrets \
-  --from-literal=anthropic-api-key="$ANTHROPIC_API_KEY"
-
-# 2. apply network policy + job
-kubectl apply -f deploy/networkpolicy.yaml
-kubectl apply -f deploy/agent-job.yaml
-
-# 3. watch it run
-kubectl logs -f job/claude-agent -c agent
-```
-
-!!! warning "Per-platform difference"
-
-    - **AKS**— keep the manifest as-is; ensure the cluster has a network-policy
-      engine (Azure NPM, Calico, or Cilium).
-    - **OpenShift**— remove the explicit `runAsUser`/`runAsGroup` from
-      `deploy/agent-job.yaml` and let the `restricted-v2` SCC assign them.
-
-    See [Sandboxing & YOLO Mode](yolo-mode.md#enforcement-openshift-aks) for why
-    this is safe.
-
-## Step 7— Wire it into CI
+## Step 6— Wire it into CI
 
 === "GitLab"
 
@@ -121,7 +92,7 @@ kubectl logs -f job/claude-agent -c agent
               anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
     ```
 
-## Step 8— View telemetry in Elastic
+## Step 7— View telemetry in Elastic
 
 Every command, output, and git mutation is streamed (secret-scrubbed) to Elastic
 via the OTel Collector sidecar. Explore it in a Kibana dashboard— see the

@@ -37,7 +37,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           tags=("$AGENT_IMAGE:latest" "$AGENT_IMAGE:${GITHUB_SHA::8}")
           # On a release tag (v1.2.3) also publish the bare version (1.2.3) so the
-          # Helm chart, GitLab component, and GitHub Action can pin to it.
+          # GitLab component and GitHub Action can pin to it.
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             tags+=("$AGENT_IMAGE:${GITHUB_REF_NAME}" "$AGENT_IMAGE:${GITHUB_REF_NAME#v}")
           fi

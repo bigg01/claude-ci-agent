@@ -11,14 +11,14 @@ result against the same spec. The spec is the contract both sides are held to.
 
 ```mermaid
 flowchart LR
-  S["spec/&lt;feature&gt;.md<br/>(the contract)"]
-  A["Agent — read-write<br/>implements the spec"]
-  R["Advisor — read-only<br/>reviews against the spec"]
-  M["New PR / MR branch"]
+  S["Spec"]
+  A["Agent<br/>(writes)"]
+  R["Advisor<br/>(reviews)"]
+  M["PR / MR"]
   S --> A --> M --> R
   S --> R
-  R -->|"gaps found"| A
-  R -->|"meets spec"| H["Human merges"]
+  R -->|gaps| A
+  R -->|meets spec| H["Human merges"]
 ```
 
 ## Why a spec
@@ -83,7 +83,7 @@ a **manual** click so it only runs when you ask:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
     inputs:
       prompt: >-
         Implement the specification in spec/feature01.md exactly. Satisfy every
@@ -129,7 +129,7 @@ claude-agent-advisor:
         --output-format json > claude-result.json
     - test -f review.md || echo "Advisor produced no review.md." > review.md
     - cat review.md
-  artifacts: { when: always, paths: [review.md] }
+  artifacts: { when: always, paths: [review.md, claude-result.json] }
   # Auto-run only on the agent's own merge requests (branch `claude/task-<id>`),
   # so the spec-graded review fires on agent MRs but not human-authored ones.
   rules:
@@ -197,7 +197,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
     inputs:
       # The AGENT implements this spec on a new branch + MR. Runs only when this
       # is non-empty (or a CLAUDE_TASK pipeline variable is supplied ad-hoc).
@@ -247,7 +247,7 @@ claude-agent-advisor:              # spec-graded reviewer on a cheaper model
     - cat review.md
   artifacts:
     when: always
-    paths: [review.md]
+    paths: [review.md, claude-result.json]
   # Auto-review only the agent's own MRs — its branches are `claude/task-<id>`.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^claude\/task-/'
@@ -259,6 +259,13 @@ the advisor's rule matches, so the spec-graded review runs automatically on that
 (and stays off human-authored MRs). See its README to run it. (Note the literal
 `--dangerously-skip-permissions` flag rather than `$[[ inputs.claude_args ]]` — see
 the interpolation warning in [step 3](#3-review-against-the-spec-advisor-personality).)
+
+!!! note "Branch prefix and the advisor rule are coupled"
+
+    The `claude/task-` prefix is the component's default
+    [`branch_prefix`](ci-versions.md#inputs) input. If you override it (e.g.
+    `inputs.branch_prefix: "ai/"`), update the advisor's `=~ /^claude\/task-/`
+    regex to match, or the review will stop firing on the agent's MRs.
 
 ### Full loop — tracker-driven, closes itself
 

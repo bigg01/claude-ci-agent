@@ -21,13 +21,14 @@ Podman sandbox**. Every action is captured, scrubbed for secrets, and streamed t
 Elastic via an OpenTelemetry (OTel) Collector sidecar at `http://localhost:4318`.
 
 The agent runs in two CI flavors— **GitLab CI** and **GitHub Actions**— and
-detects which one it is in via `$GITLAB_CI` / `$GITHUB_ACTIONS`. The same rootless
-image deploys unchanged on **OpenShift** and **AKS** (see [`deploy/`](deploy/)).
+detects which one it is in via `$GITLAB_CI` / `$GITHUB_ACTIONS`. The sandbox is the
+runner's job container; on a self-hosted GitLab Runner that runs on OpenShift, the
+cluster's `restricted` SCC enforces the rootless, unprivileged boundary.
 
 ### 📖 [Read the full documentation →](https://bigg01.containerize.ch/claude-ci-agent/)
 
 This README is a summary; the complete docs (architecture, spec-driven development,
-CI setup, sandboxing, observability, Kubernetes/Helm, and more) live on the
+CI setup, sandboxing, observability, and more) live on the
 **[documentation site](https://bigg01.containerize.ch/claude-ci-agent/)**.
 
 Reusable across repos as a [GitLab component](templates/claude-agent.yml)
@@ -42,14 +43,14 @@ Reusable across repos as a [GitLab component](templates/claude-agent.yml)
 > [component](templates/claude-agent.yml) to the CI/CD Catalog. There is no
 > agent/test pipeline on the GitLab side.
 
-## Two ways to run it
+## How it runs
 
-Pick your path— both run the same rootless, OTel-audited sandbox:
-
-| | What it is | Start here |
-| --- | --- | --- |
-| **🔁 In CI** | The agent runs in your pipeline— an *advisor* that reviews MRs/PRs, or an *agent* that applies a fix and opens a new branch. Triggered by pipelines and `@claude` comments. | [CI versions](#ci-versions) · GitLab [component](templates/claude-agent.yml) · GitHub [action](action.yml) / [`.github/workflows/`](.github/workflows/) |
-| **☸️ Deployed on Kubernetes** | The same image runs as a **Job on OpenShift or AKS**— one image satisfies arbitrary-UID injection and the `restricted` Pod Security Standard. | [Deploying on Kubernetes](#deploying-on-kubernetes-openshift--aks) · [`deploy/`](deploy/) |
+The agent runs **in your pipeline**— an *advisor* that reviews MRs/PRs, or an
+*agent* that applies a fix and opens a new branch. Triggered by pipelines and
+`@claude` comments, it runs in the same rootless, OTel-audited sandbox on both
+platforms: GitLab [component](templates/claude-agent.yml) (`include: component:`)
+and GitHub [action](action.yml) / [`.github/workflows/`](.github/workflows/). See
+[CI versions](#ci-versions).
 
 ## Requirements
 
@@ -220,24 +221,7 @@ top would be redundant isolation, not new isolation. YOLO mode here means
 ├─ Makefile                 # docs + container build targets
 ├─ zensical.toml            # Zensical site config
 ├─ architecture.drawio      # editable architecture diagram
-├─ deploy/                  # Kubernetes manifests (AKS / OpenShift)
 ├─ tests/                   # end-to-end test
 ├─ docs/                    # documentation sources
 └─ .github/workflows/       # docs deploy workflow
 ```
-
-## Deploying on Kubernetes (OpenShift & AKS)
-
-The agent ships as a rootless, non-root image (`USER 1001:0` with group-writable
-paths), so it satisfies both OpenShift's arbitrary-UID injection and the AKS
-`restricted` Pod Security Standard from a single image.
-
-```bash
-kubectl apply -f deploy/networkpolicy.yaml
-kubectl apply -f deploy/agent-job.yaml
-```
-
-On **OpenShift**, remove the explicit `runAsUser`/`runAsGroup` from the Job and let
-the `restricted-v2` SCC assign them. On **AKS**, ensure the cluster was created with
-a network policy engine (Azure NPM, Calico, or Cilium) so `networkpolicy.yaml` is
-enforced.

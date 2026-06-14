@@ -35,12 +35,8 @@ Team A agents ─▶ otel-collector-team-a ─▶ claude-agent-team-a-*  ─▶ 
 Team B agents ─▶ otel-collector-team-b ─▶ claude-agent-team-b-*  ─▶ Kibana (Team B view + role)
 ```
 
-Deploy one collector per team:
-
-```sh
-TEAM=sre-payments APPLY=1 addons/team-routing/k8s/render.sh
-TEAM=sre-platform APPLY=1 addons/team-routing/k8s/render.sh
-```
+Run one collector per team from `addons/team-routing/collector-config.team.yaml`,
+each started with its own `OTEL_TEAM` (e.g. `sre-payments`, `sre-platform`).
 
 Point that team's agents at their collector:
 

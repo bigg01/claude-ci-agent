@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.7
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.8
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret store�
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -278,6 +278,15 @@ Claude-Model: claude-sonnet-4-6
 
 ### GitLab CI— using the `claude-agent` component
 
+This section has two halves: the reusable **component you reference**
+([`templates/claude-agent.yml`](https://github.com/bigg01/claude-ci-agent/blob/main/templates/claude-agent.yml)),
+and a runnable **example you copy**
+([`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)).
+Read the reference to know what the component does, then copy the example to get a
+working pipeline.
+
+#### 1. Reference — the `claude-agent` component
+
 A reusable [GitLab CI/CD component](https://docs.gitlab.com/ee/ci/components/)
 ships with this project at
 [`templates/claude-agent.yml`](https://github.com/bigg01/claude-ci-agent/blob/main/templates/claude-agent.yml).
@@ -288,13 +297,16 @@ GitHub workflow:
   `merge_request_event`: it reviews the diff and posts the verdict as an MR note.
 - **`claude-agent`** (read-write) runs when `$CLAUDE_TASK` is non-empty (from the
   `prompt` input, or a pipeline variable supplied by a manual run / trigger token
-  / webhook — GitLab has no native "MR comment" trigger): it applies the change
-  on a new branch and opens a **new MR**, never the default branch.
+  / webhook — GitLab has no native "MR comment" trigger): it applies the change on
+  a new branch (`branch_prefix` + pipeline id) and opens a **new MR**, never the
+  default branch.
 
 Both jobs start an **OTel Collector sidecar** (nested Podman) when
 `ELASTIC_OTLP_ENDPOINT` is set, emit per-run cost, optionally fetch secrets via
 the [OpenBao addon](secrets-openbao.md), and default to bypass-permissions
 ("YOLO") mode — safe here because the agent is [fully contained](yolo-mode.md).
+Each job also publishes `claude-result.json` (the raw run output — usage, cost,
+result) as a job artifact.
 
 !!! note "Claude runs in the job container; nested Podman is optional"
 
@@ -306,15 +318,44 @@ the [OpenBao addon](secrets-openbao.md), and default to bypass-permissions
     nested rootless Podman, leave `ELASTIC_OTLP_ENDPOINT` unset to skip the sidecar
     — the agent still runs; only the exported audit trail is lost.
 
-!!! example "Runnable example"
+##### Inputs
 
-    A copy-paste consuming project — `.gitlab-ci.yml` plus a `spec/feature01.md` —
-    lives in
-    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test).
-    It gates the agent behind a manual click, pins the advisor to a cheaper model,
-    and shows how to add a custom advisor job that reuses the component's hidden
-    `.claude-base` template. See [Spec-driven development](spec-driven.md) for the
-    full implement-then-review loop it demonstrates.
+| Input | Default | Description |
+| --- | --- | --- |
+| `stage` | `test` | Pipeline stage both jobs run in. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.8` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
+| `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
+| `branch_prefix` | `claude/task-` | Prefix for the branch the agent pushes (the pipeline id is appended, e.g. `claude/task-1234`). Keep it in sync with any advisor `rules:` that match on the branch name. |
+| `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
+| `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
+| `token_variable` | `GITLAB_TOKEN` | **Name** of the variable holding a GitLab token (`api` scope) used to post MR notes (advisor) and open MRs (agent). `CI_JOB_TOKEN` is not sufficient. |
+| `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
+| `otel_endpoint` | `http://localhost:4318` | OTLP endpoint the agent exports to (the sidecar listens here). |
+| `team` | `default` | `team.name` resource attribute, for per-team cost attribution. |
+| `bao_audience` | `$CI_SERVER_URL` | Audience (`aud`) of the OIDC JWT minted for the optional [OpenBao addon](secrets-openbao.md). |
+
+!!! warning "Provide the key as a variable, not an input"
+
+    Pass the variable **name** via `api_key_variable`, then create that masked,
+    protected CI/CD variable with your team's key. Component inputs are
+    interpolated as plaintext into the compiled pipeline, so passing the key
+    directly would leak it.
+
+#### 2. Usage — minimal `examples/gitlab` pipeline
+
+This is the **minimal** way to use the component: set one variable and write a
+single `include:`. The component ships both personalities, so the advisor
+auto-runs on merge requests and the agent runs whenever you hand it a task — no
+hand-written jobs.
+
+!!! tip "Minimal here, advanced in spec-driven"
+
+    This page shows the bare include. For the **advanced** version of the same
+    example — gating the agent behind a manual click, a spec-graded custom advisor
+    on a cheaper model, artifacts, and the full implement → review → merge loop —
+    see [Spec-driven development](spec-driven.md). The runnable
+    [`examples/gitlab/claude-ci-agent-test/`](https://github.com/bigg01/claude-ci-agent/tree/main/examples/gitlab/claude-ci-agent-test)
+    project is that advanced form.
 
 **Step 1 — set the Anthropic key as a CI/CD variable** (this is how the key is
 provided; it is **never** a component input). In the consuming project (or group):
@@ -333,7 +374,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.7
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.8
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -345,35 +386,13 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.7` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.8` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable ⇒ protected ref"
 
     A **Protected** variable is only injected on **protected** branches/tags. If the
     pipeline runs on an unprotected branch, `ANTHROPIC_API_KEY` is empty and the job
     fails fast — either protect the branch or drop the Protected flag.
-
-#### Inputs
-
-| Input | Default | Description |
-| --- | --- | --- |
-| `stage` | `test` | Pipeline stage both jobs run in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.7` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
-| `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
-| `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
-| `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the masked, protected CI/CD variable holding your team's Anthropic key— never the key itself. The job fails fast if it is unset. |
-| `token_variable` | `GITLAB_TOKEN` | **Name** of the variable holding a GitLab token (`api` scope) used to post MR notes (advisor) and open MRs (agent). `CI_JOB_TOKEN` is not sufficient. |
-| `claude_args` | `--dangerously-skip-permissions` | Extra flags for the `claude` CLI; set empty to require approvals. |
-| `otel_endpoint` | `http://localhost:4318` | OTLP endpoint the agent exports to (the sidecar listens here). |
-| `team` | `default` | `team.name` resource attribute, for per-team cost attribution. |
-| `bao_audience` | `$CI_SERVER_URL` | Audience (`aud`) of the OIDC JWT minted for the optional [OpenBao addon](secrets-openbao.md). |
-
-!!! warning "Provide the key as a variable, not an input"
-
-    Pass the variable **name** via `api_key_variable`, then create that masked,
-    protected CI/CD variable with your team's key. Component inputs are
-    interpolated as plaintext into the compiled pipeline, so passing the key
-    directly would leak it.
 
 ### GitHub Actions— using the `claude-ci-agent` action
 
@@ -460,7 +479,7 @@ Set as CI/CD variables (masked/protected, or minted at runtime by the
 stages: [implement, review]
 
 variables:
-  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.7
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.8
   CLAUDE_MODEL: "claude-sonnet-4-6"
   CLAUDE_CODE_ENABLE_TELEMETRY: "1"
   OTEL_LOG_TOOL_CONTENT: "1"

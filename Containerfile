@@ -13,13 +13,11 @@ FROM quay.io/podman/stable:latest
 #    the GitLab component and GitHub workflow.
 RUN dnf install -y nodejs npm git python3 jq curl && dnf clean all
 
-# 2. The image must run as a non-root user on BOTH platforms:
-#    - OpenShift assigns an arbitrary, non-root UID at runtime (e.g. 1000740000)
-#      that is NOT in /etc/passwd and whose primary group is root (GID 0).
-#    - AKS / vanilla Kubernetes with the "restricted" Pod Security Standard
-#      requires runAsNonRoot, so the image itself must default to a non-root UID.
-#    Both cases are satisfied by making everything the agent writes to group-
-#    writable (GID 0) and shipping a non-root default user.
+# 2. The image must run as a non-root user. The CI runner may also assign an
+#    arbitrary, non-root UID at runtime — e.g. a self-hosted runner on OpenShift,
+#    where the UID is NOT in /etc/passwd and its primary group is root (GID 0).
+#    Both cases are satisfied by making everything the agent writes group-writable
+#    (GID 0) and shipping a non-root default user.
 ENV NPM_CONFIG_PREFIX=/opt/npm-global \
     PATH=/opt/npm-global/bin:$PATH \
     HOME=/opt/agent-home
@@ -44,7 +42,7 @@ RUN podman --version && node --version && claude --version
 
 WORKDIR /workspace
 
-# 5. Default to a non-root UID with primary group root (GID 0). AKS uses this UID
-#    directly; OpenShift overrides it with its allocated UID — group-writable
-#    paths above keep both working.
+# 5. Default to a non-root UID with primary group root (GID 0). Most runners use
+#    this UID directly; an OpenShift runner overrides it with its allocated UID —
+#    the group-writable paths above keep both working.
 USER 1001:0
