@@ -11,7 +11,7 @@
         </mxCell>
 
         <!-- GitLab CI -->
-        <mxCell id="gitlab" value="GitLab CI&#10;&#10;include: claude-agent component&#10;$GITLAB_CI == true&#10;OpenShift GitLab Runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="gitlab" value="GitLab CI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="40" y="150" width="210" height="110" as="geometry" />
         </mxCell>
 

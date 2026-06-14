@@ -33,12 +33,10 @@ Team A agents ─▶ otel-collector-team-a ─▶ claude-agent-team-a-*
 Team B agents ─▶ otel-collector-team-b ─▶ claude-agent-team-b-*
 ```
 
-Deploy one per team with [`k8s/render.sh`](k8s/render.sh):
-
-```sh
-TEAM=sre-payments  APPLY=1 ./k8s/render.sh        # otel-collector-sre-payments
-TEAM=sre-platform  APPLY=1 ./k8s/render.sh        # otel-collector-sre-platform
-```
+Run one collector per team from [`collector-config.team.yaml`](collector-config.team.yaml),
+each started with its own `OTEL_TEAM` (e.g. `sre-payments`, `sre-platform`). The
+config forces every record it receives into that team's `claude-agent-<team>-*`
+index, so a mistagged run can't leak across tenants.
 
 Then point that team's agents at their collector:
 

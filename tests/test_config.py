@@ -1,5 +1,6 @@
-"""Static validation of project config: TOML, the GitLab component, k8s manifests,
-and the compose file. These run in CI without building any container."""
+"""Static validation of project config: TOML, the GitLab component, the GitHub
+workflow/action, and the compose file. These run in CI without building any
+container."""
 
 from __future__ import annotations
 
@@ -15,15 +16,6 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 def _load_yaml(relpath):
     with open(REPO / relpath) as fh:
         return yaml.safe_load(fh)
-
-
-def _load_kind(relpath, kind):
-    """Return the first document of the given `kind` from a (multi-doc) manifest."""
-    with open(REPO / relpath) as fh:
-        for doc in yaml.safe_load_all(fh):
-            if doc and doc.get("kind") == kind:
-                return doc
-    raise AssertionError(f"no {kind} document in {relpath}")
 
 
 # --------------------------------------------------------------------------- #
@@ -92,25 +84,6 @@ def test_github_agent_workflow_parses():
     wf = _load_yaml(".github/workflows/claude-agent.yml")
     assert ("on" in wf) or (True in wf)
     assert "agent" in wf["jobs"]
-
-
-# --------------------------------------------------------------------------- #
-# Kubernetes manifests (deploy/) — hardened for AKS + OpenShift
-# --------------------------------------------------------------------------- #
-
-def test_agent_job_is_hardened():
-    job = _load_kind("deploy/agent-job.yaml", "Job")
-    pod = job["spec"]["template"]["spec"]
-    assert pod["securityContext"]["runAsNonRoot"] is True
-    container = pod["containers"][0]["securityContext"]
-    assert container["allowPrivilegeEscalation"] is False
-    assert container["capabilities"]["drop"] == ["ALL"]
-
-
-def test_networkpolicy_denies_ingress():
-    netpol = _load_yaml("deploy/networkpolicy.yaml")
-    assert netpol["kind"] == "NetworkPolicy"
-    assert netpol["spec"]["ingress"] == []
 
 
 # --------------------------------------------------------------------------- #

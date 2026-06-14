@@ -8,6 +8,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.8] — 2026-06-14
+
+### Removed
+- **Kubernetes/Helm deployment of the agent.** The project now focuses solely on
+  **GitLab CI** and **GitHub Actions**. Deleted the `deploy/` tree (Helm chart,
+  `agent-job.yaml`, `networkpolicy.yaml`), `docs/kubernetes.md`, the Helm-only
+  `release.yml` workflow, the `addons/team-routing/k8s/` manifests, and the K8s
+  manifest tests. Releases still publish the sandbox image; they no longer package
+  a Helm chart.
+
+### Added
+- **`branch_prefix` component input** (default `claude/task-`). The agent's branch
+  name is now overridable — the pipeline id is still appended for uniqueness
+  (e.g. `claude/task-1234`). Keep it in sync with any advisor `rules:` that match
+  on the branch name.
+- **`claude-result.json` (and `review.md`) stored as job artifacts.** Both
+  component jobs now publish the raw Claude run output — usage, cost, result — with
+  `when: always`, so it survives a failed MR post / push and is downloadable from
+  the pipeline.
+
+### Changed
+- The example's spec-graded `claude-agent-advisor` now **auto-reviews only the
+  agent's own MRs** (source branch `claude/task-*`) via a `rules:` `if:` match,
+  instead of running on a manual click — keeping it off human-authored MRs and
+  non-MR pipelines.
+- Reframed the docs (README, architecture, yolo-mode, getting-started, index) so
+  the sandbox is described as **the runner-provided job container** — rootless
+  Podman on a CI runner, or the Kubernetes CRI on a self-hosted runner on
+  **OpenShift** (where the `restricted-v2` SCC enforces the boundary). Dropped the
+  AKS deployment target.
+- Pinned component/action/example/docs to `0.1.0-alpha.8`.
+
 ## [0.1.0-alpha.7] — 2026-06-14
 
 ### Changed
@@ -129,7 +161,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...HEAD
+[0.1.0-alpha.8]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.7...v0.1.0-alpha.8
 [0.1.0-alpha.7]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
 [0.1.0-alpha.5]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.4...v0.1.0-alpha.5

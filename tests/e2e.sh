@@ -59,24 +59,9 @@ spec, job = docs
 assert "inputs" in spec.get("spec", {}), "component spec.inputs missing"
 assert "prompt" in spec["spec"]["inputs"], "component is missing the 'prompt' input"
 assert "claude-agent" in job, "component job 'claude-agent' missing"
-
-# Kubernetes deploy manifests (AKS / OpenShift) must parse and be hardened.
-# The manifest may hold several documents (e.g. ServiceAccount + Job).
-with open("deploy/agent-job.yaml") as fh:
-    agent_job = next(d for d in yaml.safe_load_all(fh) if d and d.get("kind") == "Job")
-pod = agent_job["spec"]["template"]["spec"]
-assert pod["securityContext"]["runAsNonRoot"] is True, "pod must be runAsNonRoot (AKS restricted PSS)"
-container = pod["containers"][0]["securityContext"]
-assert container["allowPrivilegeEscalation"] is False, "allowPrivilegeEscalation must be false"
-assert container["capabilities"]["drop"] == ["ALL"], "container must drop ALL capabilities"
-
-with open("deploy/networkpolicy.yaml") as fh:
-    netpol = yaml.safe_load(fh)
-assert netpol["kind"] == "NetworkPolicy", "networkpolicy.yaml is not a NetworkPolicy"
-assert netpol["spec"]["ingress"] == [], "NetworkPolicy must deny all ingress"
 print("ok")
 PY
-pass "zensical.toml + GitLab component + k8s manifests parse cleanly"
+pass "zensical.toml + GitLab component parse cleanly"
 
 # ---------------------------------------------------------------------------
 info "Stage 2/5 — build sandbox image"

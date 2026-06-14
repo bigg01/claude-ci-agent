@@ -33,7 +33,7 @@ wrapper we add around Claude.
   with an arbitrary, non-root UID and no privilege escalation. It is *not* wrapped
   in a nested `podman run`; the container *is* the sandbox. What runs that
   container varies by platform — rootless **Podman** on a CI runner, or the
-  **Kubernetes CRI** (CRI-O on OpenShift, containerd on AKS) in the cloud — but the
+  **Kubernetes CRI** (e.g. CRI-O) on a self-hosted runner on OpenShift — but the
   rootless, unprivileged boundary is identical either way. The blast radius of any
   command is the throwaway container, not a host. (Nested Podman is used only by
   the agent itself, to build/test the app under review — see
@@ -98,7 +98,7 @@ Both the Anthropic and NVIDIA sandboxes exist to add an isolation boundary
 on a trusted host in the first place— it runs inside a rootless, unprivileged,
 ephemeral CI container— so the same boundary is already present.
 
-| Capability | Our solution— rootless container on Kubernetes (OpenShift / AKS) | Anthropic sandbox (sandbox-runtime) | NVIDIA sandbox (container / microVM GPU isolation) |
+| Capability | Our solution— rootless CI container (e.g. on an OpenShift GitLab Runner) | Anthropic sandbox (sandbox-runtime) | NVIDIA sandbox (container / microVM GPU isolation) |
 | --- | --- | --- | --- |
 | **Isolation mechanism** | OS-level container (namespaces + cgroups), rootless | OS primitives wrapping a process (bubblewrap on Linux, Seatbelt on macOS) | Hardened container / microVM around the workload |
 | **Primary purpose** | Run untrusted CI workloads safely | Confine a single agent's bash/file/network access on a dev host | Isolate GPU compute workloads from host and each other |
@@ -121,24 +121,21 @@ ephemeral CI container— so the same boundary is already present.
 
 > Legend: ✅ provided · ⚠️ partial / depends on deployment · ❌ not provided · ➖ not applicable.
 
-## Enforcement (OpenShift & AKS)
+## Enforcement on an OpenShift runner
 
-The containment above is not aspirational— it is enforced by the platform's
-admission controls, and the same workload runs on both OpenShift and AKS:
+When the GitLab Runner is self-hosted on **OpenShift**, the containment above is
+not aspirational— the cluster's admission controls enforce it on every job pod:
 
-| Control | OpenShift | AKS / vanilla Kubernetes |
-| --- | --- | --- |
-| **Non-root, no privilege escalation** | `restricted-v2` SCC (allocated arbitrary UID, `allowPrivilegeEscalation: false`) | `restricted` Pod Security Standard + the pod `securityContext` in [`deploy/agent-job.yaml`](https://github.com/bigg01/claude-ci-agent/blob/main/deploy/agent-job.yaml) |
-| **Dropped capabilities / seccomp** | enforced by SCC | `capabilities: drop: [ALL]`, `seccompProfile: RuntimeDefault` |
-| **Network isolation** | OVN-Kubernetes NetworkPolicy | Azure NPM / Calico / Cilium NetworkPolicy— see [`deploy/networkpolicy.yaml`](https://github.com/bigg01/claude-ci-agent/blob/main/deploy/networkpolicy.yaml) |
-| **Ephemerality** | Job `ttlSecondsAfterFinished`, fresh pod per run | same Job spec |
+| Control | How OpenShift enforces it |
+| --- | --- |
+| **Non-root, no privilege escalation** | `restricted-v2` SCC allocates an arbitrary non-root UID and sets `allowPrivilegeEscalation: false` |
+| **Dropped capabilities / seccomp** | enforced by the SCC |
+| **Network isolation** | OVN-Kubernetes NetworkPolicy |
+| **Ephemerality** | a fresh job pod per pipeline run, torn down after |
 
 The image ([`Containerfile`](architecture.md)) ships a non-root default user
-(`USER 1001:0`) with group-writable paths, so it satisfies **both** OpenShift's
-arbitrary-UID injection and AKS's `runAsNonRoot` requirement without per-platform
-image changes. The [`deploy/`](https://github.com/bigg01/claude-ci-agent/tree/main/deploy)
-manifests note the one difference— on OpenShift you drop the explicit
-`runAsUser`/`runAsGroup` and let the SCC assign them.
+(`USER 1001:0`) with group-writable paths, so it runs cleanly under OpenShift's
+arbitrary-UID injection without per-platform image changes.
 
 !!! warning "Scope of this justification"
 
