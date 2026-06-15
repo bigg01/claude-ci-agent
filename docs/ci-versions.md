@@ -65,7 +65,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret storeâ
     logs and only exposed to steps that reference it):
 
     ```yaml
-    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.11
+    - uses: bigg01/claude-ci-agent@v0.1.0-alpha.12
       with:
         prompt: "Fix the failing tests."
         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +93,7 @@ The agent needs an `ANTHROPIC_API_KEY`. Store it in the platform's secret storeâ
 
     ```yaml
     include:
-      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.11
+      - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.12
         inputs:
           prompt: "Fix the failing tests."
     ```
@@ -323,7 +323,7 @@ result) as a job artifact.
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage both jobs run in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.11` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12` | Published sandbox image providing the Claude Code CLI + baked CI helpers. |
 | `prompt` | `""` | Task handed to the **agent** personality. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it for ad-hoc agent runs. |
 | `branch_prefix` | `claude/task-` | Prefix for the branch the agent pushes (the pipeline id is appended, e.g. `claude/task-1234`). Keep it in sync with any advisor `rules:` that match on the branch name. |
 | `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. |
@@ -374,7 +374,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.11
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.12
     inputs:
       prompt: "Fix the failing unit tests and commit the change."
       # api_key_variable: MY_KEY_NAME   # only if your variable isn't ANTHROPIC_API_KEY
@@ -386,7 +386,7 @@ The component reads the variable **by name** at runtime and exports it for the
 !!! note "Replace the component path and pin a version"
 
     `<group>` must point at the GitLab project that hosts this component. Pin
-    `@v0.1.0-alpha.11` to a released tag (or a commit SHA) for reproducible pipelines.
+    `@v0.1.0-alpha.12` to a released tag (or a commit SHA) for reproducible pipelines.
 
 !!! warning "Protected variable â‡’ protected ref"
 
@@ -479,7 +479,7 @@ Set as CI/CD variables (masked/protected, or minted at runtime by the
 stages: [implement, review]
 
 variables:
-  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.11
+  AGENT_IMAGE: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12
   CLAUDE_MODEL: "claude-sonnet-4-6"
   CLAUDE_CODE_ENABLE_TELEMETRY: "1"
   OTEL_LOG_TOOL_CONTENT: "1"
