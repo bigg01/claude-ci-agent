@@ -39,7 +39,7 @@ inputs:
 runs:
   using: "docker"
   # Published by the build-image job in .github/workflows/claude-agent.yml.
-  image: "docker://ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.11"
+  image: "docker://ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12"
   env:
     ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
     CLAUDE_MODEL: ${{ inputs.model }}

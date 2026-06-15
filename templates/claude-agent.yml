@@ -34,6 +34,11 @@
 #                            via token_variable. CI_JOB_TOKEN is NOT sufficient.
 # Optional — telemetry export (no sidecar starts unless ELASTIC_OTLP_ENDPOINT set):
 #   ELASTIC_OTLP_ENDPOINT, ELASTIC_OTLP_AUTHORIZATION
+# Optional — corporate proxy (set as CI/CD variables). Honored by claude, git and
+# curl, normalized to upper+lower case, and forwarded into the OTel sidecar.
+# `localhost`/127.0.0.1 are auto-added to NO_PROXY so the OTLP export is never
+# proxied; add your internal GitLab/Elastic hosts to NO_PROXY yourself if needed:
+#   HTTP_PROXY, HTTPS_PROXY, NO_PROXY
 # Optional — OpenBao addon (mint secrets via this job's OIDC JWT, nothing stored):
 #   BAO_ADDR, BAO_ROLE, BAO_SECRET_PATH   (audience via the bao_audience input)
 #
@@ -58,7 +63,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.11
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -144,20 +149,36 @@ spec:
         exit 1
       fi
       export ANTHROPIC_API_KEY="$KEY_VALUE"
-    # 2. Optional OpenBao fetch — no-op unless BAO_ADDR is set. Sourced secrets
+    # 2. Corporate proxy — no-op unless a proxy variable is set. Mirror it to both
+    #    upper/lower case (claude/Node prefer UPPER, git/curl prefer lower) and
+    #    force localhost into NO_PROXY so the OTLP export to localhost:4318 is never
+    #    routed through the proxy.
+    - |
+      if [ -n "${HTTPS_PROXY:-}${https_proxy:-}${HTTP_PROXY:-}${http_proxy:-}" ]; then
+        export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}" https_proxy="${https_proxy:-${HTTPS_PROXY:-}}"
+        export HTTP_PROXY="${HTTP_PROXY:-${http_proxy:-}}"   http_proxy="${http_proxy:-${HTTP_PROXY:-}}"
+        _np="${NO_PROXY:-${no_proxy:-}}"
+        case ",${_np}," in *,localhost,*) : ;; *) _np="${_np:+$_np,}localhost,127.0.0.1" ;; esac
+        export NO_PROXY="$_np" no_proxy="$_np"
+        echo "Proxy configured — claude/git/curl routed via the proxy; NO_PROXY=$_np" >&2
+      fi
+    # 3. Optional OpenBao fetch — no-op unless BAO_ADDR is set. Sourced secrets
     #    (e.g. ELASTIC_*, GITLAB_TOKEN) become available to the rest of the job.
     - |
       if [ -n "${BAO_ADDR:-}" ]; then
         sh /opt/claude-ci/fetch-secrets.sh
         [ -f bao.env ] && { set -a; . ./bao.env; set +a; rm -f bao.env; }
       fi
-    # 3. Start the OTel Collector sidecar (nested Podman, shares the job network)
+    # 4. Start the OTel Collector sidecar (nested Podman, shares the job network)
     #    only when an Elastic endpoint is configured — otherwise skip it; the
-    #    agent's best-effort export to localhost:4318 just no-ops.
+    #    agent's best-effort export to localhost:4318 just no-ops. Proxy vars are
+    #    forwarded so the collector can reach Elastic through a corporate proxy.
     - |
       if [ -n "${ELASTIC_OTLP_ENDPOINT:-}" ]; then
         podman run -d --name otel-collector --network host \
           -e ELASTIC_OTLP_ENDPOINT -e ELASTIC_OTLP_AUTHORIZATION \
+          -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+          -e http_proxy -e https_proxy -e no_proxy \
           -v /opt/claude-ci/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro,Z \
           docker.io/otel/opentelemetry-collector-contrib:latest \
           --config /etc/otelcol/config.yaml

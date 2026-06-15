@@ -8,6 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.12] — 2026-06-15
+
+### Added
+- **Corporate proxy support.** Set `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` as CI/CD
+  variables and the component honors them for `claude`, `git`, and `curl` —
+  normalizing each to upper *and* lower case, forcing `localhost`/`127.0.0.1` into
+  `NO_PROXY` (so the OTLP export to `localhost:4318` is never proxied), and
+  forwarding them into the OTel sidecar container.
+- **Component README** ([`templates/README.md`](templates/README.md)) — jobs,
+  quick-start `include:`, required/optional CI/CD variables, the full inputs table,
+  the `CLAUDE_MODEL`-precedence gotcha, and how it runs.
+
 ## [0.1.0-alpha.11] — 2026-06-14
 
 ### Changed
@@ -203,7 +215,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.11...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.12...HEAD
+[0.1.0-alpha.12]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.11...v0.1.0-alpha.12
 [0.1.0-alpha.11]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11
 [0.1.0-alpha.10]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10
 [0.1.0-alpha.9]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.8...v0.1.0-alpha.9
