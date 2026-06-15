@@ -63,7 +63,7 @@ nav = [
 #  { "Per-team routing" = "team-routing.md" },
   { "Local stack (Compose)" = "local-stack.md" },
 #  { "LLM Gateway" = "llm-gateway.md" },
-#  { "Secrets (OpenBao)" = "secrets-openbao.md" },
+  { "Secrets (OpenBao)" = "secrets-openbao.md" },
 #  { "Markdown in 5min" = "markdown.md" },
 ]
 
