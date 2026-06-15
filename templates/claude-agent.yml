@@ -32,6 +32,9 @@
 #                            'api' scopes and at least the Developer role — a
 #                            read-only token gets a 403 on git push. Name overridable
 #                            via token_variable. CI_JOB_TOKEN is NOT sufficient.
+# Optional — LLM gateway: route claude at a proxy/gateway instead of the Anthropic
+# API. Set the `base_url` input, or an ANTHROPIC_BASE_URL CI/CD variable directly:
+#   ANTHROPIC_BASE_URL
 # Optional — telemetry export (no sidecar starts unless ELASTIC_OTLP_ENDPOINT set):
 #   ELASTIC_OTLP_ENDPOINT, ELASTIC_OTLP_AUTHORIZATION
 # Optional — corporate proxy (set as CI/CD variables). Honored by claude, git and
@@ -63,7 +66,7 @@ spec:
       default: test
       description: Pipeline stage both jobs run in.
     image:
-      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12
+      default: ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.13
       description: >-
         Container image providing the Claude Code CLI + baked CI helpers (the
         published sandbox image). Pin to a released tag; override to a mirror.
@@ -81,6 +84,13 @@ spec:
     model:
       default: "claude-sonnet-4-6"
       description: Claude model id passed to `claude --model`.
+    base_url:
+      default: ""
+      description: >-
+        Optional ANTHROPIC_BASE_URL — point claude at an LLM gateway/proxy (prompt
+        caching, guardrails, vendor routing) instead of the Anthropic API directly.
+        Leave empty to use the API. You can also set ANTHROPIC_BASE_URL as a CI/CD
+        variable; this input wins when non-empty.
     api_key_variable:
       default: "ANTHROPIC_API_KEY"
       description: >-
@@ -149,6 +159,10 @@ spec:
         exit 1
       fi
       export ANTHROPIC_API_KEY="$KEY_VALUE"
+      # LLM gateway (optional): route claude via ANTHROPIC_BASE_URL. The base_url
+      # input wins when set; otherwise an ANTHROPIC_BASE_URL CI/CD variable is honored.
+      if [ -n "$[[ inputs.base_url ]]" ]; then export ANTHROPIC_BASE_URL="$[[ inputs.base_url ]]"; fi
+      [ -n "${ANTHROPIC_BASE_URL:-}" ] && echo "Routing claude via ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" >&2 || true
     # 2. Corporate proxy — no-op unless a proxy variable is set. Mirror it to both
     #    upper/lower case (claude/Node prefer UPPER, git/curl prefer lower) and
     #    force localhost into NO_PROXY so the OTLP export to localhost:4318 is never
@@ -269,17 +283,24 @@ spec:
       fi
       git config user.email "claude-agent@ci.local"
       git config user.name "Claude CI Agent"
+      # The agent may EITHER commit its own work (the prompt asks for atomic,
+      # conventional commits) OR leave edits unstaged. Handle both: branch from
+      # where the pipeline started, commit any leftover working-tree changes, then
+      # decide whether anything changed by comparing HEAD to the start commit —
+      # NOT by `git diff` alone, which misses commits the agent already made.
+      START_SHA="${CI_COMMIT_SHA:-$(git rev-parse HEAD)}"
       BRANCH="$[[ inputs.branch_prefix ]]${CI_PIPELINE_ID}"
       git checkout -b "$BRANCH"
-      # Stage the agent's WORK only. Exclude this job's own run output
-      # (claude-result.json, review.md) — it stays on disk for the artifact
-      # upload below, but must never land in the agent's commit.
+      # Stage any uncommitted work, excluding this job's own run output
+      # (claude-result.json, review.md — kept on disk for the artifact upload).
+      # If the agent already committed, this stages nothing and the commit no-ops.
       git add -A -- ':!claude-result.json' ':!review.md'
-      if git diff --cached --quiet; then
-        echo "⚠ Agent produced NO file changes — so no branch/MR was created and the" >&2
-        echo "  advisor has nothing to review. What the agent reported:" >&2
+      git commit -m "feat: automated change by Claude agent" >/dev/null 2>&1 || true
+      if [ "$(git rev-parse HEAD)" = "$START_SHA" ]; then
+        echo "⚠ Agent produced NO new commits or file changes — nothing to push, so" >&2
+        echo "  no MR was created and the advisor has nothing to review. Agent reported:" >&2
         jq -r '.result // "(no result text)"' claude-result.json | sed 's/^/    /' >&2
-        echo "  Unstaged working-tree state (empty = the agent wrote nothing):" >&2
+        echo "  Working-tree state (empty = the agent wrote and committed nothing):" >&2
         git status --porcelain | sed 's/^/    /' >&2 || true
         echo "  If you expected changes: confirm the task/spec is in the repo, and run" >&2
         echo "  the IMPLEMENTER on a capable model (claude-sonnet-4-6 / opus — a small" >&2
@@ -287,7 +308,6 @@ spec:
         echo "  a project CLAUDE_MODEL CI/CD variable overrides the component default." >&2
         exit 0
       fi
-      git commit -m "feat: automated change by Claude agent"
       git push "https://oauth2:${GL_TOKEN}@${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}.git" "$BRANCH"
       MR_RESP="$(jq -n \
         --arg s "$BRANCH" \
@@ -304,7 +324,7 @@ spec:
       echo "Branch:  $BRANCH → ${CI_DEFAULT_BRANCH:-main}"
       echo "MR:      $(printf '%s' "$MR_RESP" | jq -r '.web_url // "(MR not created — check the token role/scope)"')"
       echo "Files changed:"
-      git show --stat --format= HEAD | sed 's/^/  /'
+      git diff --stat "$START_SHA"..HEAD | sed 's/^/  /'
       echo "What the agent reports doing:"
       jq -r '.result // "(no result text)"' claude-result.json | sed 's/^/  /'
       echo "───────────────────────────────────────────────────────"

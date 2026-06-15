@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0-alpha.13] — 2026-06-15
+
+### Fixed
+- **Agent that commits its own work now opens an MR.** The prompt asks the agent
+  for atomic commits, so Claude often *commits* during its run — but the push logic
+  only checked for an unstaged/dirty tree (`git add` + `git diff --cached`), found
+  it clean, and reported "no file changes", so the branch was never pushed and the
+  advisor never triggered. The agent job now branches from the pipeline's start
+  commit (`CI_COMMIT_SHA`), commits any leftover working-tree changes, and pushes
+  when **HEAD has moved** — recognizing commits the agent made itself. The run
+  summary's file list now spans `START_SHA..HEAD`.
+
+### Added
+- **`base_url` input / `ANTHROPIC_BASE_URL`.** Route `claude` through an LLM
+  gateway or proxy (prompt caching, guardrails, vendor routing) instead of the
+  Anthropic API. Set the `base_url` input, or an `ANTHROPIC_BASE_URL` CI/CD variable
+  directly (the input wins when set).
+
 ## [0.1.0-alpha.12] — 2026-06-15
 
 ### Added
@@ -215,7 +233,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - pytest suite, end-to-end and local-CI test scripts.
 - Zensical documentation site.
 
-[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.12...HEAD
+[Unreleased]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.13...HEAD
+[0.1.0-alpha.13]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.12...v0.1.0-alpha.13
 [0.1.0-alpha.12]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.11...v0.1.0-alpha.12
 [0.1.0-alpha.11]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.10...v0.1.0-alpha.11
 [0.1.0-alpha.10]: https://github.com/bigg01/claude-ci-agent/compare/v0.1.0-alpha.9...v0.1.0-alpha.10

@@ -18,7 +18,7 @@ stages:
   - test
 
 include:
-  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.12
+  - component: $CI_SERVER_FQDN/<group>/claude-ci-agent/claude-agent@v0.1.0-alpha.13
     inputs:
       # Advisor needs no prompt. The agent runs this (or a CLAUDE_TASK variable):
       prompt: "Fix the failing unit tests and commit the change."
@@ -41,6 +41,7 @@ variable shares them across a team.
 
 | Variable(s) | Purpose |
 | --- | --- |
+| `ANTHROPIC_BASE_URL` | Route `claude` through an LLM gateway/proxy instead of the Anthropic API (prompt caching, guardrails, vendor routing). Equivalent to the `base_url` input. |
 | `ELASTIC_OTLP_ENDPOINT`, `ELASTIC_OTLP_AUTHORIZATION` | Stream the secret-scrubbed audit trail + per-run cost to Elastic. No OTel sidecar starts unless `ELASTIC_OTLP_ENDPOINT` is set. |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | Corporate proxy. Honored by `claude`, `git`, and `curl`, mirrored to upper/lower case, and forwarded into the OTel sidecar. `localhost`/`127.0.0.1` are auto-added to `NO_PROXY` so the OTLP export is never proxied — add your internal GitLab/Elastic hosts to `NO_PROXY` yourself. |
 | `BAO_ADDR`, `BAO_ROLE`, `BAO_SECRET_PATH` | [OpenBao addon](../addons/openbao): the job mints a short-lived OIDC JWT and exchanges it for secrets at runtime — nothing long-lived is stored. |
@@ -50,10 +51,11 @@ variable shares them across a team.
 | Input | Default | Description |
 | --- | --- | --- |
 | `stage` | `test` | Pipeline stage both jobs run in. |
-| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.12` | The published sandbox image (Claude Code CLI + baked CI helpers). Pin to a released tag; override to a mirror. |
+| `image` | `ghcr.io/bigg01/claude-ci-agent/claude-agent:0.1.0-alpha.13` | The published sandbox image (Claude Code CLI + baked CI helpers). Pin to a released tag; override to a mirror. |
 | `prompt` | `""` | Task for the **agent**. Leave empty for advisor-only use; a `CLAUDE_TASK` pipeline variable overrides it. |
 | `branch_prefix` | `claude/task-` | Prefix for the agent's branch; the pipeline id is appended (e.g. `claude/task-1234`). Keep in sync with any advisor `rules:` that match on the branch name. |
 | `model` | `claude-sonnet-4-6` | Claude model id passed to `claude --model`. Use a capable model for the **implementer** — a small model like `haiku` often stalls on autonomous multi-file work. |
+| `base_url` | `""` | Optional `ANTHROPIC_BASE_URL` — route `claude` through an **LLM gateway/proxy** instead of the Anthropic API. Empty = use the API directly. (A `ANTHROPIC_BASE_URL` CI/CD variable also works; this input wins when set.) |
 | `api_key_variable` | `ANTHROPIC_API_KEY` | **Name** of the variable holding your Anthropic key. |
 | `token_variable` | `GITLAB_TOKEN` | **Name** of the variable holding the GitLab token (see above). |
 | `claude_args` | `--dangerously-skip-permissions` | Extra flags for `claude`. Bypass-permissions ("YOLO") is safe because the job is [fully contained](https://bigg01.containerize.ch/claude-ci-agent/yolo-mode/); set to `""` to require approvals. |
