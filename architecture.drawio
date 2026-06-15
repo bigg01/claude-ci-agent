@@ -31,14 +31,20 @@
                 <mxCell id="elastic" value="Elastic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08161e;strokeColor=#25e8ff;fontColor=#cdeef5;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="1000" y="200" width="150" height="110" as="geometry"/>
                 </mxCell>
+                <mxCell id="openbao" value="OpenBao (optional)&#xa;secrets via short-lived OIDC/JWT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#06181a;strokeColor=#3ad6c0;fontColor=#aef3ea;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="470" width="210" height="100" as="geometry"/>
+                </mxCell>
                 <mxCell id="gateway" value="LLM Gateway (optional)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ff9d2e;fontColor=#ff9d2e;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="310" y="460" width="420" height="80" as="geometry"/>
+                    <mxGeometry x="310" y="450" width="420" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="proxy" value="HTTPS_PROXY (optional)&#xa;corporate egress · claude · git · curl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a1206;strokeColor=#ffd24a;fontColor=#ffe39a;fontFamily=Rajdhani;align=center;verticalAlign=middle;fontStyle=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="548" width="420" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="anthropic" value="Creation model&#xa;Anthropic API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#071018;strokeColor=#25e8ff;fontColor=#e7feff;fontFamily=Rajdhani;align=center;verticalAlign=middle;" parent="1" vertex="1">
-                    <mxGeometry x="300" y="600" width="200" height="78" as="geometry"/>
+                    <mxGeometry x="300" y="640" width="200" height="78" as="geometry"/>
                 </mxCell>
                 <mxCell id="reviewer" value="Review model&#xa;(independent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#160a1f;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;align=center;verticalAlign=middle;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="550" y="600" width="220" height="78" as="geometry"/>
+                    <mxGeometry x="550" y="640" width="220" height="78" as="geometry"/>
                 </mxCell>
                 <mxCell id="e1" value="trigger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="gitlab" target="pod" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -58,10 +64,16 @@
                 <mxCell id="e8" value="&lt;span&gt;messages&lt;/span&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#ff9d2e;fontColor=#ffc785;fontFamily=Rajdhani;" parent="1" source="agent" target="gateway" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e6" value="create (Agent)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="gateway" target="anthropic" edge="1">
+                <mxCell id="e9" value="egress" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#ffd24a;fontColor=#ffe39a;fontFamily=Rajdhani;dashed=1;" parent="1" source="gateway" target="proxy" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7" value="review (Advisor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;" parent="1" source="gateway" target="reviewer" edge="1">
+                <mxCell id="e6" value="create (Agent)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#25e8ff;fontColor=#9af6ff;fontFamily=Rajdhani;" parent="1" source="proxy" target="anthropic" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="review (Advisor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b388ff;fontColor=#d6c3ff;fontFamily=Rajdhani;" parent="1" source="proxy" target="reviewer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="OIDC/JWT &#8594; secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;startArrow=block;strokeColor=#3ad6c0;fontColor=#aef3ea;fontFamily=Rajdhani;dashed=1;" parent="1" source="openbao" target="sandbox" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
